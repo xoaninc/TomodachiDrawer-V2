@@ -2,6 +2,9 @@
 
 TomodachiDrawer is a collection of firmware and software that generates inputs to control a Nintendo Switch to draw arbitrary images in the Palette House.
 
+## WARNING: Switch 1 is prone to desyncs
+See #12 , unfortunately it seems that the Switch 1 is prone to desyncing randomly from inexplicable lag spikes. I am trying to see if I can make any sense of it but there is a chance that this renders larger images unfeasible for switch 1 users. Increasing the tap delays might help, but only maybe, and would double, quadruple, or quintuple the drawing time which would be not ideal, and also require a seperate RP2040 firmware... Ideas are welcome in #12 as testing continues
+
 <img src="Docs/baconator_preview.webp" width="600" alt="Tomodachi Drawer drawing a Baconator">
 <img src="Docs/nurture_preview.webp" width="600" alt="Tomodachi Drawer drawing the Porter Robinson album art for Nurture">
 

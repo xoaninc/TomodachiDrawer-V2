@@ -3,7 +3,7 @@
 TomodachiDrawer is a collection of firmware and software that generates inputs to control a Nintendo Switch to draw arbitrary images in the Palette House.
 
 ## WARNING: Switch 1 is prone to desyncs
-See #12 , unfortunately it seems that the Switch 1 is prone to desyncing randomly from inexplicable lag spikes. I am trying to see if I can make any sense of it but there is a chance that this renders larger images unfeasible for switch 1 users. Increasing the tap delays might help, but only maybe, and would double, quadruple, or quintuple the drawing time which would be not ideal, and also require a seperate RP2040 firmware... Ideas are welcome in #12 as testing continues
+See #12 , unfortunately it seems that the Switch 1 is prone to desyncing randomly from inexplicable lag spikes. Current testing suggests this is related to the 3D preview. Switch 2 users are unaffected, and drawings of types that are just lone transparent images do not seem to be prone to these effects. 0.3.1 and 0.3.2 added some mitigations for some other types of delay, but the lag one is still under investigation. If you have any information or clips of the desync occuring, be sure to comment it on that issue!
 
 <img src="Docs/baconator_preview.webp" width="600" alt="Tomodachi Drawer drawing a Baconator">
 <img src="Docs/nurture_preview.webp" width="600" alt="Tomodachi Drawer drawing the Porter Robinson album art for Nurture">
@@ -30,10 +30,10 @@ Downloads are available in the releases, they come in a few forms
 [Releases](https://github.com/Lucas7yoshi/TomodachiDrawer/releases)
 
 - TomodachiDrawer.UI.Avalonia.#.#.#.platform.zip
-platform can be win64 for windows, osxarm64 for Mac on ARM cpus, osx64 for Mac on x64 cpus, and linux64 and linuxarm64 for the same on linux.
+platform can be win64 for windows, osx-arm64 for Mac on ARM cpus, osx64 for Mac on x64 cpus, and linux64 and linuxarm64 for the same on linux.
 Download the one that is right for your computer, for mac users with any recent macbook arm64 should work.
 
-For linux and mac users, you may need to run chmod +x binaryNameHere or go into your settings to allow it.
+For Linux and Mac users, you may need to run chmod +x binaryNameHere or go into your settings to allow it.
 
 ### Or briefly, in text:
 
@@ -54,14 +54,6 @@ For linux and mac users, you may need to run chmod +x binaryNameHere or go into 
 The logic may be delicate for Linux and Mac platforms as those are ones I cannot test.
 If it does not detect it, you can still drag-and-drop the .uf2 included with the download to your Pi for step 7, and for the image data, select "export .uf2" and save it to a destination, and once done, drag and drop onto the RP2040 drive to flash it manually.
 
-
-## Roadmap
-Things I want to do in roughly the order I want to do them in:
-- Further optimizations
-- Use bucket tool to fill the most significant colour (for non transparent images)
-- Use shape tools for non-square areas of arbitrary size
-- Experiment with input acceleration and analogue input for faster movement, requires reverse engineering.
-
 ## Contributing
 
 This project is a recreation of a mess of AI coded nonsense that was unmaintainable by me and too fixated to my setup. Please refrain from using AI irresponsibily if you wish to contribute. As I encountered several times, even just leaning on it to think of a general idea on how to approach a problem can send you down a overly complicated rabbit hole that you really dont need to, so be smart.
@@ -79,10 +71,13 @@ Contributions are encouraged, and if you want to make a new UI for a new platfor
 The main areas for improvement are optimizations to the routing logic, I strongly discourage letting AI go loose on this as well, as I found my prior ai-slop-proof-of-concept version was actively slower than even the more simpler logic in the first iteration of this!
 
 ## License
-See [LICENSE](./LICENSE)
+This project is licensed under the GPL-3.0 license, read it in full here: [LICENSE](./LICENSE)
+
+The main motivator for this license is that it requires that derivatives share their work with the class openly if they derive from this.
 
 ## Used libraries
 This project depends on the following libraries:
 
 - SkiaSharp	(For image reading/writing)
 - Google.OrTools (for the TSP solving)
+- ImageSharp (For its WuQuantizer)

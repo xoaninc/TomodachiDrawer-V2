@@ -297,7 +297,7 @@ namespace TomodachiDrawer.Core
         public void SelectColour(PaletteColour target, double speed)
         {
             _output.Tap(Button.Y, speed, speed);
-            _output.Delay(300); // wait for open
+            _output.Delay(400); // wait for open
 
             if (!_hotbarHomed)
             {
@@ -313,7 +313,7 @@ namespace TomodachiDrawer.Core
 
             // We should now be on slot 0 so
             _output.Tap(Button.Y, speed, speed);
-            _output.Delay(300);
+            _output.Delay(400);
 
             // Now in the colour menu. What tab? Shrug!
             if (!target.IsArbitrary && target.GridX != null && target.GridY != null)
@@ -332,7 +332,7 @@ namespace TomodachiDrawer.Core
 
                 // confirm and close out
                 _output.Tap(Button.A, speed, speed);
-                _output.Delay(300);
+                _output.Delay(400);
 
                 _lastGridX = (int)target.GridX;
                 _lastGridY = (int)target.GridY;
@@ -402,7 +402,7 @@ namespace TomodachiDrawer.Core
                     _output.Tap(valDirection);
 
                 _output.Tap(Button.A);
-                _output.Delay(300); // wait for ui to close.
+                _output.Delay(400); // wait for ui to close.
             }
         }
 

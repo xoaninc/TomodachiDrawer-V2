@@ -43,7 +43,7 @@ namespace TomodachiDrawer.Core
             }
 
             output.Tap(Button.X);
-            output.Delay(300);
+            output.Delay(400);
             if (!_toolbarHomed)
             {
                 for (int i = 0; i < ToolbarItemCount; i++)
@@ -55,7 +55,7 @@ namespace TomodachiDrawer.Core
 
             // open submenu
             output.Tap(Button.X, 50, 25);
-            output.Delay(300);
+            output.Delay(400);
 
             int currentColumn = _lastBrushColumn;
             if (currentColumn < 0)
@@ -78,9 +78,9 @@ namespace TomodachiDrawer.Core
 
             // Confirm and return to canvas.
             output.Tap(Button.A, 50, 25); // Switch 1 seems to want the press to last longer oddly. Hold for 50ms instead of 25.
-            output.Delay(300);
+            output.Delay(400);
             output.Tap(Button.A, 50, 25);
-            output.Delay(500);
+            output.Delay(600);
 
             return true;
         }

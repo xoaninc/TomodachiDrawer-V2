@@ -151,11 +151,7 @@ static void send_report_raw(void) {
     while (!tud_hid_ready()) {
         tud_task();
     }
-    uint8_t local_report[8];
-    for (int i = 0; i < 8; i++) {
-        local_report[i] = current_report[i];
-    }
-    tud_hid_report(0, local_report, sizeof(local_report));
+    tud_hid_report(0, current_report, sizeof(current_report));
 }
 
 // send report and update neopixel. used during actual playback.

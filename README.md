@@ -12,6 +12,9 @@ The program splits images into layers matched to colours in the game, and genera
 
 It has a crossplatform Avalonia UI desktop app that supports flashing directly to a RP2040-Zero which can then be plugged into the USB port of a Switch or Switch 2 where it will begin to draw.
 
+## Hardware Compatibility
+This was designed for an RP2040-Zero as it was one of the cheapest options, however any RP2040 based board *should* be compatible, with support for the LED on the standard Raspberry Pi Pico too.
+
 ## How To Use
 
 Initial setup requires a few steps, made easier by the UI.

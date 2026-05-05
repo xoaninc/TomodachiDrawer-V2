@@ -125,6 +125,16 @@ static void neopixel_set_rgb(uint8_t r, uint8_t g, uint8_t b) {
     pio_sm_put_blocking(NEOPIXEL_PIO, NEOPIXEL_SM, grb);
 }
 
+static void boringpixel_init(void) {
+    gpio_init(25);
+    gpio_set_dir(25, GPIO_OUT);
+}
+
+static void boringpixel_set(bool on)
+{
+    gpio_put(25, on);
+}
+
 // delays precisely but while running tud_task so the usb is active.
 // this is the alternative to running a multicore architecture which i tried
 // and let me tell you, it was not a source of much fun.
@@ -154,8 +164,10 @@ static void push_report(void) {
     // Mirror the Python firmware: green while any button is held, dim-white when idle
     if (current_report[0] != 0 || current_report[1] != 0) {
         neopixel_set_rgb(0, NEOPIXEL_BRIGHT, 0);
+        boringpixel_set(true);
     } else {
         neopixel_set_rgb(10, 10, 10);
+        boringpixel_set(false);
     }
 }
 
@@ -164,8 +176,10 @@ static void push_report(void) {
 static void error_flash(int interval_ms) {
     while (true) {
         neopixel_set_rgb(NEOPIXEL_BRIGHT, 0, 0);
+        boringpixel_set(true);
         delay_ms_usb(interval_ms);
         neopixel_set_rgb(0, 0, 0);
+        boringpixel_set(false);
         delay_ms_usb(interval_ms);
     }
 }
@@ -193,6 +207,7 @@ void get_good_rainbow(uint8_t hue, uint8_t *r, uint8_t *g, uint8_t *b) {
 static void done_rainbow(void) {
     uint8_t hue = 0;
     uint8_t r, g, b;
+    boringpixel_set(true);
     while (true) {
         get_good_rainbow(hue, &r, &g, &b);
         neopixel_set_rgb(r/RAINBOW_DIVISOR,g/RAINBOW_DIVISOR,b/RAINBOW_DIVISOR);
@@ -256,6 +271,7 @@ int main(void) {
     board_init();
     tusb_init();
     neopixel_init();
+    boringpixel_init();
 
     // yapp until they hear
     while (!tud_mounted()) {

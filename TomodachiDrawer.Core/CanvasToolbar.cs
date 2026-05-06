@@ -95,6 +95,7 @@ namespace TomodachiDrawer.Core
 
             output.Tap(Button.X);
             output.Delay(400);
+
             for (int i = 0; i < ToolbarItemCount; i++)
                 output.Tap(DPad.LEFT); // Slam to left
             for (int i = 0; i < ToolbarBucketIndex; i++)
@@ -102,6 +103,8 @@ namespace TomodachiDrawer.Core
 
             // I want to pick this back up from my laptop so I am pushing this WIP code up lol
             throw new NotImplementedException("I am not done implementing this, download the release, silly.");
+
+            // Need to see whats in the bucket submenu.
         }
     }
 }

@@ -140,9 +140,12 @@ static void boringpixel_set(bool on)
 // and let me tell you, it was not a source of much fun.
 static void delay_ms_usb(uint32_t ms) {
     absolute_time_t end = make_timeout_time_ms(ms);
+    // Stop sending 8ms (one bInterval) before the deadline so the host has time
+    // to consume the last report before we need the endpoint free for push_report().
+    absolute_time_t stop_sending = (ms > HID_BINTERVAL_MS) ? make_timeout_time_ms(ms - HID_BINTERVAL_MS) : end;
     while (!time_reached(end)) {
         tud_task();
-        if (tud_hid_ready()) {
+        if (!time_reached(stop_sending) && tud_hid_ready()) {
             tud_hid_report(0, current_report, sizeof(current_report));
         }
     }
@@ -364,4 +367,4 @@ uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t id, hid_report_type_t type, 
     }
     return 0;
 }
-void     tud_hid_set_report_cb(uint8_t itf, uint8_t id, hid_report_type_t type, uint8_t const *buf, uint16_t len) {}
+void tud_hid_set_report_cb(uint8_t itf, uint8_t id, hid_report_type_t type, uint8_t const *buf, uint16_t len) {}

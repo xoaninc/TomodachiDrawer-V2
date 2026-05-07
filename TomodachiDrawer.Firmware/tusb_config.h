@@ -26,6 +26,7 @@
 // HID CONFIGURATION (Switch Gamepad)
 //--------------------------------------------------------------------
 #define CFG_TUD_HID_EP_BUFSIZE      64
+#define HID_BINTERVAL_MS            8  // bInterval in ms; must match the cutoff in delay_ms_usb()
 
 #ifdef __cplusplus
  }

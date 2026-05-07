@@ -353,6 +353,15 @@ int main(void) {
     return 0;
 }
 
-// no-op required callbacks >:(
-uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t id, hid_report_type_t type, uint8_t *buf, uint16_t len) { return 0; }
+// in the event this is actually used by the switch 1...
+uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t id, hid_report_type_t type, uint8_t *buf, uint16_t len) {
+    (void)itf; (void)id;
+    if (type == HID_REPORT_TYPE_INPUT) {
+        uint16_t size = (uint16_t)sizeof(current_report);
+        if (size > len) size = len;
+        memcpy(buf, current_report, size);
+        return size;
+    }
+    return 0;
+}
 void     tud_hid_set_report_cb(uint8_t itf, uint8_t id, hid_report_type_t type, uint8_t const *buf, uint16_t len) {}

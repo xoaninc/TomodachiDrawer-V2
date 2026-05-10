@@ -51,15 +51,11 @@ jobs:
     - name: Build
       working-directory: TomodachiDrawer.UI.Avalonia
       run: dotnet publish --configuration ${{ matrix.configuration }} -r ${{ matrix.runtime }} --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true ${{ github.ref_type == 'tag' && format('-p:Version={0}', github.ref_name) || '' }}
-    - name: Zip Published Files 
-      run: |
-        cd TomodachiDrawer.UI.Avalonia/bin/${{ matrix.configuration }}/net10.0/${{ matrix.runtime }}/publish/
-        zip -r "${{ github.workspace }}/TomodachiDrawer-Avalonia-${{ matrix.runtime }}-${{ matrix.configuration }}.zip" .
     - name: Upload Artifacts
       uses: actions/upload-artifact@v7
       with:
         name: TomodachiDrawer-Avalonia-${{ matrix.runtime }}-${{ matrix.configuration }}
-        path: TomodachiDrawer-Avalonia-${{ matrix.runtime }}-${{ matrix.configuration }}.zip 
+        path: TomodachiDrawer.UI.Avalonia/bin/${{ matrix.configuration }}/net10.0/${{ matrix.runtime }}/publish/
   release:
     name: Draft release
     runs-on: ubuntu-latest
@@ -71,16 +67,19 @@ jobs:
     - name: Download artifacts
       uses: actions/download-artifact@v8
       with:
-        path: artifacts
-        merge-multiple: true
-    - name: Rename Zips
+        path: unzipped-artifacts
+        merge-multiple: false
+    - name: Zip for Release
       run: |
-        cd artifacts
-        for file in *.zip; do
-          mv "$file" "${file/.zip/-${{ github.ref_name }}.zip}"
+        mkdir final-zips
+        for dir in unzipped-artifacts/*/; do
+          dirname=$(basename "$dir")
+          cd "$dir"
+          zip -r "../../final-zips/${dirname}-${{ github.ref_name }}.zip" .
+          cd ../..
         done
     - name: Create release draft
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        gh release create ${{ github.ref_name}} artifacts/*.zip --draft --generate-notes --title "${{ github.ref_name }} - RELEASENAME"
+        gh release create ${{ github.ref_name}} final-zips/*.zip --draft --generate-notes --title "${{ github.ref_name }} - RELEASENAME_REPLACEME"

@@ -113,7 +113,7 @@ namespace TomodachiDrawer.Core
             for (int i = 0; i < Math.Abs(deltaX); i++)
                 output.Tap(dir);
 
-            bool needsTwoTaps = _lastBrushColumn != targetColumn;
+            bool needsTwoTaps = deltaX != 0;
 
             _lastBrushColumn = targetColumn;
 

@@ -20,5 +20,7 @@ namespace TomodachiDrawer.Core.Models
 
         /// <summary>1x1 points for individual drawing.</summary>
         public HashSet<CanvasPoint> FineDetailPoints = new();
+
+        public HashSet<CanvasPoint> BucketClicks = new();
     }
 }

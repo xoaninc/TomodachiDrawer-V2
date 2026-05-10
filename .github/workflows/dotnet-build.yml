@@ -50,7 +50,7 @@ jobs:
         cache-dependency-path: '**/*.csproj'
     - name: Build
       working-directory: TomodachiDrawer.UI.Avalonia
-      run: dotnet publish --configuration ${{ matrix.configuration }} -r ${{ matrix.runtime }} --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+      run: dotnet publish --configuration ${{ matrix.configuration }} -r ${{ matrix.runtime }} --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true ${{ github.ref_type == 'tag' && format('-p:Version={0}', github.ref_name) || '' }}
     - name: Zip Published Files 
       run: |
         cd TomodachiDrawer.UI.Avalonia/bin/${{ matrix.configuration }}/net10.0/${{ matrix.runtime }}/publish/

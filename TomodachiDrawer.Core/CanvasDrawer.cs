@@ -33,7 +33,7 @@ namespace TomodachiDrawer.Core
             _log = logger ?? Console.WriteLine;
 
             if (switchVersion == SwitchVersion.None)
-                throw new ArgumentOutOfRangeException("Must set switch version.");
+                throw new ArgumentOutOfRangeException(nameof(switchVersion), "Switch version must be set.");
 
             _switchVersion = switchVersion;
         }
@@ -298,7 +298,7 @@ namespace TomodachiDrawer.Core
         // TODO: MORE WORK TWEAKING THESE!!!
         private static readonly int[] LargeBrushEvictionThreshold = [1, 1, 1, 6, 12];
 
-        public void DetectBucketZones(ColourLayer l, int width, int height, int minZoneSize = 25)
+        public static void DetectBucketZones(ColourLayer l, int width, int height, int minZoneSize = 25)
         {
             var workingSet = new bool[width, height];
 

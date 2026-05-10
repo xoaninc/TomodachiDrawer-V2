@@ -81,7 +81,7 @@ namespace TomodachiDrawer.Core
         {
             int targetColumn = BrushColumnBySize[brushSize];
 
-            if (_lastBrushColumn == targetColumn)
+            if (_lastBrushColumn == targetColumn && _toolbarCurrentIndex == ToolbarBrushIndex)
             {
                 return false;
             }
@@ -112,11 +112,17 @@ namespace TomodachiDrawer.Core
             var dir = deltaX > 0 ? DPad.RIGHT : DPad.LEFT;
             for (int i = 0; i < Math.Abs(deltaX); i++)
                 output.Tap(dir);
+
+            bool needsTwoTaps = deltaX != 0;
+
             _lastBrushColumn = targetColumn;
 
             // Confirm and return to canvas.
-            output.Tap(Button.A, 50, 25); // Switch 1 seems to want the press to last longer oddly. Hold for 50ms instead of 25.
-            output.Delay(500);
+            if (needsTwoTaps)
+            {
+                output.Tap(Button.A, 50, 25); // Switch 1 seems to want the press to last longer oddly. Hold for 50ms instead of 25.
+                output.Delay(500);
+            }
             output.Tap(Button.A, 50, 25);
             output.Delay(600);
 

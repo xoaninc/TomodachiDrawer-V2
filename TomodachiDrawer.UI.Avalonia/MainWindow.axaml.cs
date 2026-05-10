@@ -8,12 +8,19 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Styling;
 using Avalonia.Threading;
+
 using SkiaSharp;
+
+using System.Reflection;
+using System.Text.Json;
+
 using TomodachiDrawer.Core;
 using TomodachiDrawer.Core.ImageProcessing;
 using TomodachiDrawer.Core.ImageProcessing.Denoising;
 using TomodachiDrawer.Core.ImageProcessing.Quantizers;
+using TomodachiDrawer.Core.Models;
 using TomodachiDrawer.Core.OutputSinks;
+
 using Button = Avalonia.Controls.Button; // conflict with the Button enum in SinkEnums
 
 namespace TomodachiDrawer.UI.Avalonia;
@@ -23,6 +30,10 @@ public partial class MainWindow : Window
     private string _currentImagePath = string.Empty;
     private Dictionary<PaletteColour, SKBitmap> _colourLayersDebug = new();
     private readonly CancellationTokenSource _cts = new();
+
+
+    private bool BusyExporting = false;
+    private SwitchVersion _selectedSwitchVersion = SwitchVersion.None;
 
     public MainWindow()
     {
@@ -40,12 +51,93 @@ public partial class MainWindow : Window
         DenoisingComboBox.SelectedIndex = 0;
         DenoisingComboBox.SelectionChanged += (_, _) => UpdatePreview();
 
+        GetSettings();
+        SwitchVersionComboBox.SelectedIndex = (int)_selectedSwitchVersion - 1;
+
+        // this dont work
         DragDrop.SetAllowDrop(this, true);
         AddHandler(DragDrop.DropEvent, OnDrop);
         AddHandler(DragDrop.DragOverEvent, OnDragOver);
 
+#if DEBUG
+        this.Title = $"TomodachiDrawer.UI.Avalonia - {GetVersionString(true)}";
+#else
+        this.Title = $"TomodachiDrawer.UI.Avalonia - {GetVersionString(false)}";
+#endif
+
         StartRP2040Polling();
+        _ = PerformAsyncUpdateCheck();
     }
+
+    private string GetVersionString(bool includeCommit)
+    {
+        var currentVersion = Assembly.GetEntryAssembly()?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "dev";
+        if (currentVersion.StartsWith("1.0.0"))
+        {
+            if (includeCommit)
+            {
+                return "dev-" + currentVersion.Split('+').Last();
+            }
+            else
+            {
+                return "dev";
+            }
+        }
+        if (!includeCommit)
+        {
+            return currentVersion.Split('+').First();
+        }
+        return currentVersion;
+    }
+
+    private async Task PerformAsyncUpdateCheck()
+    {
+        try
+        {
+            var ourVersion = GetVersionString(false);
+            if (ourVersion == "dev")
+            {
+                AppendLog("Skipping update check for dev.");
+                return;
+            }
+            using var http = new HttpClient();
+            http.DefaultRequestHeaders.UserAgent.ParseAdd($"TomodachiDrawer {ourVersion}");
+
+            using var response = await http.GetAsync("https://api.github.com/repos/Lucas7yoshi/TomodachiDrawer/releases/latest");
+            response.EnsureSuccessStatusCode();
+            using var responseStream = await response.Content.ReadAsStreamAsync();
+
+            using var responseJsonObject = JsonDocument.Parse(responseStream);
+
+            // 0.0.0 format, no v, no -.
+            var releaseVersionTag = responseJsonObject.RootElement.GetProperty("tag_name").GetString() ?? "0.0.0";
+
+            // see if its newer.
+            if (releaseVersionTag != null)
+            {
+                if (releaseVersionTag != ourVersion)
+                {
+                    _ = ShowMessageAsync(
+                        "Update available",
+                        "A new update is available on GitHub." +
+                        $"\nCurrent Version: {ourVersion}" +
+                        $"\nLatest Version: {releaseVersionTag}" +
+                        $"\n\nDownload at:\nhttps://github.com/Lucas7yoshi/TomodachiDrawer"
+                    );
+                }
+                else
+                {
+                    AppendLog($"Up to date! {ourVersion}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            AppendLog($"Failed to check for updates: {ex.Message}");
+        }
+
+    }
+
 
     protected override void OnClosed(System.EventArgs e)
     {
@@ -75,8 +167,8 @@ public partial class MainWindow : Window
                         RP2040StatusLabel.Text = $"RP2040 found: {path}";
                         RP2040StatusLabel.Foreground = Brushes.Green;
 
-                        FlashFirmwareButton.IsEnabled = true;
-                        ExportRP2040Button.IsEnabled = hasImage;
+                        FlashFirmwareButton.IsEnabled = !BusyExporting;
+                        ExportRP2040Button.IsEnabled = hasImage && !BusyExporting;
                         if (!lastState)
                         {
                             AppendLog($"RP2040 connected @ {path}");
@@ -332,7 +424,7 @@ public partial class MainWindow : Window
         await Task.Run(async () =>
         {
             var fileOutput = new FileControllerSink(outputPath);
-            var drawer = new CanvasDrawer(fileOutput, AppendLog);
+            var drawer = new CanvasDrawer(fileOutput, _selectedSwitchVersion, AppendLog);
             drawer.ConnectAndConfirmController();
             await drawer.DrawImage(SKBitmap.Decode(imagePath), settings, denoiser, tspLimit);
             fileOutput.Dispose();
@@ -348,10 +440,22 @@ public partial class MainWindow : Window
         if (string.IsNullOrEmpty(_currentImagePath))
             return;
 
+        if (_selectedSwitchVersion == SwitchVersion.None)
+        {
+            _ = ShowMessageAsync(
+                "Select Switch Version",
+                "For compatibility, you must select a switch version in the dropdown." +
+                "\n\nSwitch 1 is more prone to desyncs, so this avoids certain things that are particularly prone to desyncing." +
+                "\nPlease be aware that even with Switch 1 selected, desyncs are unfortunately expected due to inconsistent and unpredictable lag in the drawing UI."
+            );
+            return;
+        }
+
         var imagePath = _currentImagePath;
         var denoiser = DenoisingComboBox.SelectedItem?.ToString();
         var tspLimit = (float)(TSPTimeLimitUpDown.Value ?? 0.5m);
 
+        BusyExporting = true;
         ExportRP2040Button.IsEnabled = false;
         TimeSpan totalTime = TimeSpan.MaxValue;
         var settings = GetQuantizerSettings();
@@ -365,7 +469,7 @@ public partial class MainWindow : Window
 
             AppendLog($"Exporting to RP2040 flash ({Path.GetFileName(tempPath)})");
             var timingSink = new TimingSink();
-            var drawer = new CanvasDrawer(timingSink, AppendLog);
+            var drawer = new CanvasDrawer(timingSink, _selectedSwitchVersion, AppendLog);
             drawer.ConnectAndConfirmController();
             AppendLog("Starting to generate inputs...");
             await drawer.DrawImage(SKBitmap.Decode(imagePath), settings, denoiser, tspLimit, false);
@@ -392,6 +496,7 @@ public partial class MainWindow : Window
             totalTime = timingSink.TotalTime;
         });
 
+        BusyExporting = false;
         ExportRP2040Button.IsEnabled = true;
 
         var estimateStr = $"{totalTime:h\\hm\\ms\\s}";
@@ -402,6 +507,17 @@ public partial class MainWindow : Window
     {
         if (string.IsNullOrEmpty(_currentImagePath))
             return;
+
+        if (_selectedSwitchVersion == SwitchVersion.None)
+        {
+            _ = ShowMessageAsync(
+                "Select Switch Version",
+                "For compatibility, you must select a switch version in the dropdown." +
+                "\n\nSwitch 1 is more prone to desyncs, so this avoids certain things that are particularly prone to desyncing." +
+                "\nPlease be aware that even with Switch 1 selected, desyncs are unfortunately expected due to inconsistent and unpredictable lag in the drawing UI."
+            );
+            return;
+        }
 
         var file = await StorageProvider.SaveFilePickerAsync(
             new FilePickerSaveOptions
@@ -437,7 +553,7 @@ public partial class MainWindow : Window
 
             AppendLog($"Exporting to UF2 ({Path.GetFileName(tempPath)})");
             var timingSink = new TimingSink();
-            var drawer = new CanvasDrawer(timingSink, AppendLog);
+            var drawer = new CanvasDrawer(timingSink, _selectedSwitchVersion, AppendLog);
             drawer.ConnectAndConfirmController();
             AppendLog("Starting to generate inputs...");
             await drawer.DrawImage(SKBitmap.Decode(imagePath), settings, denoiser, tspLimit, false);
@@ -597,5 +713,33 @@ public partial class MainWindow : Window
                 + "\nLess colours means quicker drawing, and more opportunities for the solver to find large continous blocks it can draw quickly."
                 + "\nIf time is of the essence, you can also enable Denoising which can increase the number of large spots for the larger brushes."
         );
+    }
+
+    private void SaveSettings()
+    {
+        using var bw = new BinaryWriter(File.Open("settings.bin", FileMode.Create));
+        bw.Write((int)_selectedSwitchVersion);
+    }
+
+    private void GetSettings()
+    {
+        if (File.Exists("settings.bin"))
+        {
+            using var br = new BinaryReader(File.Open("settings.bin", FileMode.Open));
+            _selectedSwitchVersion = (SwitchVersion)br.ReadInt32();
+        }
+        else
+        {
+            _selectedSwitchVersion = SwitchVersion.None;
+        }
+    }
+
+    private void SwitchVersionComboBox_SelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (SwitchVersionComboBox.SelectedIndex == 0)
+            _selectedSwitchVersion = SwitchVersion.Switch1;
+        else
+            _selectedSwitchVersion = SwitchVersion.Switch2;
+        SaveSettings();
     }
 }

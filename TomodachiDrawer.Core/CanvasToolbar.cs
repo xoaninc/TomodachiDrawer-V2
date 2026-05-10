@@ -62,12 +62,15 @@ namespace TomodachiDrawer.Core
 
         private void GoToToolbarIndex(ISwitchOutput output, int targetIndex)
         {
+            if (_toolbarCurrentIndex == -1)
+                HomeToolbar(output);
             var delta = targetIndex - _toolbarCurrentIndex;
             DPad dir = delta > 0 ? DPad.RIGHT : DPad.LEFT;
             for (int i = 0; i < Math.Abs(delta); i++) // wont run if already there.
             {
                 output.Tap(dir);
             }
+            _output.Delay(300);
             _toolbarCurrentIndex = targetIndex;
         }
 
@@ -84,15 +87,13 @@ namespace TomodachiDrawer.Core
             }
 
             output.Tap(Button.X);
-            output.Delay(400);
+            output.Delay(500);
 
-            // Both no-ops in 99% of cases, but resiliant to if we start using more tools.
-            HomeToolbar(output);
             GoToToolbarIndex(output, ToolbarBrushIndex);
 
             // open submenu
             output.Tap(Button.X, 50, 25);
-            output.Delay(400);
+            output.Delay(500);
 
             int currentColumn = _lastBrushColumn;
             if (currentColumn < 0)
@@ -115,7 +116,7 @@ namespace TomodachiDrawer.Core
 
             // Confirm and return to canvas.
             output.Tap(Button.A, 50, 25); // Switch 1 seems to want the press to last longer oddly. Hold for 50ms instead of 25.
-            output.Delay(400);
+            output.Delay(500);
             output.Tap(Button.A, 50, 25);
             output.Delay(600);
 
@@ -128,9 +129,8 @@ namespace TomodachiDrawer.Core
         public void SelectBucket(ISwitchOutput output)
         {
             output.Tap(Button.X);
-            output.Delay(400);
+            output.Delay(500);
 
-            HomeToolbar(output);
             GoToToolbarIndex(output, ToolbarBucketIndex);
 
 
@@ -152,7 +152,7 @@ namespace TomodachiDrawer.Core
             // Pressing A in the submenu goes straight to canvas, pressing A from the toolbar does the same
             // so only one A press ever needed.
             output.Tap(Button.A, 50, 25);
-            output.Delay(400);
+            output.Delay(500);
         }
     }
 }

@@ -11,7 +11,7 @@ using TomodachiDrawer.Core.OutputSinks;
 
 namespace TomodachiDrawer.Core
 {
-    public class CanvasDrawer(ISwitchOutput outputSink, Action<string>? logger = null)
+    public class CanvasDrawer
     {
         public const int CanvasWidth = 256;
         public const int CanvasHeight = 256;
@@ -19,10 +19,24 @@ namespace TomodachiDrawer.Core
         private int _cursorX = 0;
         private int _cursorY = 0;
 
-        private readonly ISwitchOutput _realOutput = outputSink;
-        private readonly ColourPalette _palette = new(outputSink);
-        private readonly CanvasToolbar _toolbar = new(outputSink);
-        private readonly Action<string> _log = logger ?? Console.WriteLine;
+        private readonly ISwitchOutput _realOutput;
+        private readonly ColourPalette _palette;
+        private readonly CanvasToolbar _toolbar;
+        private readonly Action<string> _log;
+        private readonly SwitchVersion _switchVersion;
+
+        public CanvasDrawer(ISwitchOutput outputSink, SwitchVersion switchVersion, Action<string>? logger = null)
+        {
+            _realOutput = outputSink;
+            _palette = new(outputSink);
+            _toolbar = new(outputSink);
+            _log = logger ?? Console.WriteLine;
+
+            if (switchVersion == SwitchVersion.None)
+                throw new ArgumentOutOfRangeException("Must set switch version.");
+
+            _switchVersion = switchVersion;
+        }
 
         public static float GetRecommendedTSPSolveTime(int width, int height)
         {
@@ -95,7 +109,7 @@ namespace TomodachiDrawer.Core
             // This is done before the large brush detection to avoid needing to run stuff to count the large brush stuff to find the
             // biggest.
             PaletteColour? bucketColour = null;
-            if (image.Width == 256 && image.Height == 256)
+            if (_switchVersion == SwitchVersion.Switch2 && image.Width == 256 && image.Height == 256)
             {
                 _log("Seeing if we can use the bucket to save time");
                 bool anyTransparent = false;

@@ -96,6 +96,7 @@ namespace TomodachiDrawer.Core
             output.Delay(500);
 
             int currentColumn = _lastBrushColumn;
+            bool hasHomed = false;
             if (currentColumn < 0)
             {
                 for (int i = 0; i < BrushSubmenuRows; i++)
@@ -106,6 +107,7 @@ namespace TomodachiDrawer.Core
                 output.Tap(DPad.DOWN);
                 output.Tap(DPad.DOWN);
                 currentColumn = 0;
+                hasHomed = true;
             }
 
             int deltaX = targetColumn - currentColumn;
@@ -113,7 +115,7 @@ namespace TomodachiDrawer.Core
             for (int i = 0; i < Math.Abs(deltaX); i++)
                 output.Tap(dir);
 
-            bool needsTwoTaps = deltaX != 0;
+            bool needsTwoTaps = deltaX != 0 || hasHomed;
 
             _lastBrushColumn = targetColumn;
 

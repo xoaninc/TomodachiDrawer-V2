@@ -305,10 +305,16 @@ public partial class MainWindow : Window
     // messagebox replacement
     private async Task ShowMessageAsync(string title, string message, Uri? link = null, string? linkButtonText = null)
     {
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Spacing = 8,
+        };
+
         var okButton = new Button
         {
             Content = "OK",
-            HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(0, 10, 0, 0),
             MinWidth = 80,
         };
@@ -317,7 +323,7 @@ public partial class MainWindow : Window
         {
             Margin = new Thickness(16)
         };
-        stack.Children.Add(okButton);
+        buttonRow.Children.Add(okButton);
 
         Button? linkButton = null;
 
@@ -326,11 +332,10 @@ public partial class MainWindow : Window
             linkButton = new Button
             {
                 Content = linkButtonText ?? "Open Link",
-                HorizontalAlignment = HorizontalAlignment.Left,
                 Margin = new Thickness(0, 10, 0, 0),
                 MinWidth = 80,
             };
-            stack.Children.Add(linkButton);
+            buttonRow.Children.Add(linkButton);
         }
 
         stack.Children.Insert(0, new SelectableTextBlock
@@ -339,6 +344,7 @@ public partial class MainWindow : Window
             TextWrapping = TextWrapping.Wrap,
             MaxWidth = 400,
         });
+        stack.Children.Add(buttonRow);
 
         var dialog = new Window
         {

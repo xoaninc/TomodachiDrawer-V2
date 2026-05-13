@@ -301,7 +301,7 @@ namespace TomodachiDrawer.Core
         // TODO: MORE WORK TWEAKING THESE!!!
         private static readonly int[] LargeBrushEvictionThreshold = [1, 1, 2, 6, 12];
 
-        public static void DetectBucketZones(ColourLayer l, int width, int height, int minZoneSize = 30)
+        public static void DetectBucketZones(ColourLayer l, int width, int height, int minZoneSize = 36)
         {
             var workingSet = new bool[width, height];
 

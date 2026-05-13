@@ -96,7 +96,7 @@ namespace TomodachiDrawer.Core
             GoToToolbarIndex(output, ToolbarBrushIndex);
 
             // open submenu
-            output.Tap(Button.X, 50, 25);
+            output.Tap(Button.X, 100, 50); // bumped even more due to desyncs on the switch 2 (from 50/25)
             output.Delay(500);
 
             int currentColumn = _lastBrushColumn;

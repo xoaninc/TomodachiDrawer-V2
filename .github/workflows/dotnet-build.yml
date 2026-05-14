@@ -75,6 +75,7 @@ jobs:
         for dir in unzipped-artifacts/*/; do
           dirname=$(basename "$dir")
           cd "$dir"
+          echo "${dirname}"
           zip -r "../../final-zips/${dirname}-${{ github.ref_name }}.zip" .
           cd ../..
         done

@@ -70,7 +70,7 @@ namespace TomodachiDrawer.Core
             {
                 output.Tap(dir);
             }
-            _output.Delay(300);
+            _output.Delay(350);
             _toolbarCurrentIndex = targetIndex;
         }
 

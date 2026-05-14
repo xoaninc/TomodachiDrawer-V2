@@ -132,9 +132,9 @@ namespace TomodachiDrawer.Core
                     bucketColour = layers.MaxBy(l => l.FineDetailPoints.Count)!.Colour;
                     // We need to then remove it from the rest of the drawing so it doesnt draw it now.
                     layers.RemoveAll(l => l.Colour == bucketColour); // is only one but this is easiest.
-                    _log($"\tUsing bucket to fill most prevalent colour: {bucketColour.DisplayName}");
+                    _log($"\tUsing bucket to fill most prevalent colour: {bucketColour.Value.DisplayName}");
                     _toolbar.SelectBucket();
-                    _palette.SelectColour(bucketColour, 25.0);
+                    _palette.SelectColour(bucketColour.Value, 25.0);
                     _realOutput.Tap(Button.A);
                     _realOutput.Delay(1000); // This is probably generous but bucket fill seems to cause a short stutter.
                 }

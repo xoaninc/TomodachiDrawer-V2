@@ -174,7 +174,7 @@ namespace TomodachiDrawer.Core
                     var paletteColour = quantized[x, y];
                     if (paletteColour != null)
                     {
-                        output.SetPixel(x, y, paletteColour.skColor);
+                        output.SetPixel(x, y, paletteColour.Value.skColor);
                     }
                 }
             }

@@ -31,7 +31,7 @@ namespace TomodachiDrawer.Core
 
         private bool _hotbarHomed = false; // If not, we home on first colour set.
 
-        private ISwitchOutput _output;
+        private ISwitchOutput _realOutput;
 
         public static readonly Dictionary<
             string,
@@ -143,7 +143,7 @@ namespace TomodachiDrawer.Core
 
         public ColourPalette(ISwitchOutput outputSink)
         {
-            _output = outputSink;
+            _realOutput = outputSink;
         }
 
         // Helper function that takes in an image and returns a preview of it
@@ -300,8 +300,8 @@ namespace TomodachiDrawer.Core
         {
             if (_lastColour != null && _lastColour == target)
                 return;
-            _output.Tap(Button.Y, speed, speed);
-            _output.Delay(400); // wait for open
+            _realOutput.Tap(Button.Y, speed, speed);
+            _realOutput.Delay(400); // wait for open
 
             if (!_hotbarHomed)
             {
@@ -309,15 +309,15 @@ namespace TomodachiDrawer.Core
                 // We need to home, could be at an unknown position.
                 // Slam against the top so we know that, and go down from the header.
                 for (int i = 0; i < HotbarSlots + HotbarHeaderRows; i++)
-                    _output.Tap(DPad.UP, speed, speed);
+                    _realOutput.Tap(DPad.UP, speed, speed);
                 for (int i = 0; i < HotbarHeaderRows; i++)
-                    _output.Tap(DPad.DOWN, speed, speed);
+                    _realOutput.Tap(DPad.DOWN, speed, speed);
                 _hotbarHomed = true;
             }
 
             // We should now be on slot 0 so
-            _output.Tap(Button.Y, speed, speed);
-            _output.Delay(400);
+            _realOutput.Tap(Button.Y, speed, speed);
+            _realOutput.Delay(400);
 
             // Now in the colour menu. What tab? Shrug!
             if (!target.IsArbitrary && target.GridX != null && target.GridY != null)
@@ -330,13 +330,13 @@ namespace TomodachiDrawer.Core
                 DPad YDirection = deltaY > 0 ? DPad.DOWN : DPad.UP;
                 DPad XDirection = deltaX > 0 ? DPad.RIGHT : DPad.LEFT;
                 for (int i = 0; i < Math.Abs(deltaY); i++)
-                    _output.Tap(YDirection, speed, speed);
+                    _realOutput.Tap(YDirection, speed, speed);
                 for (int i = 0; i < Math.Abs(deltaX); i++)
-                    _output.Tap(XDirection, speed, speed);
+                    _realOutput.Tap(XDirection, speed, speed);
 
                 // confirm and close out
-                _output.Tap(Button.A, speed, speed);
-                _output.Delay(400);
+                _realOutput.Tap(Button.A, speed, speed);
+                _realOutput.Delay(400);
 
                 _lastGridX = (int)target.GridX;
                 _lastGridY = (int)target.GridY;
@@ -345,7 +345,7 @@ namespace TomodachiDrawer.Core
             {
                 if (!_lastWasArbitrary)
                 {
-                    _output.Tap(Button.R);
+                    _realOutput.Tap(Button.R);
                 }
 
                 // TLDR: The RGB needs to be Linearized from sRGB then turned to HSV.
@@ -369,11 +369,11 @@ namespace TomodachiDrawer.Core
                 bool valHomeTop = valSteps <= (FCR_VALUE_STEP_COUNT - 1) / 2;
 
                 // Use stick for quicker homing
-                _output.SetStick(Stick.LX, satHomeRight ? (byte)255 : (byte)0);
-                _output.SetStick(Stick.LY, valHomeTop ? (byte)0 : (byte)255);
-                _output.Press(hueHomeLeft ? Button.ZL : Button.ZR); // Home by holding
-                _output.Delay(4250); // This delay is pretty much as low as it can be for handling the worst case (black)
-                _output.ReleaseAll();
+                _realOutput.SetStick(Stick.LX, satHomeRight ? (byte)255 : (byte)0);
+                _realOutput.SetStick(Stick.LY, valHomeTop ? (byte)0 : (byte)255);
+                _realOutput.Press(hueHomeLeft ? Button.ZL : Button.ZR); // Home by holding
+                _realOutput.Delay(4250); // This delay is pretty much as low as it can be for handling the worst case (black)
+                _realOutput.ReleaseAll();
 
                 // TODO: Hue inputs could be entered at the same time as sat/val (although sat/val can only be one of those at a time, no diagonals)
                 // This would require something like
@@ -397,16 +397,16 @@ namespace TomodachiDrawer.Core
                 DPad valDirection = valHomeTop ? DPad.DOWN : DPad.UP;
 
                 for (int i = 0; i < hueInputs; i++)
-                    _output.Tap(hueTapDirection);
+                    _realOutput.Tap(hueTapDirection);
 
                 for (int i = 0; i < satInputs; i++)
-                    _output.Tap(satDirection);
+                    _realOutput.Tap(satDirection);
 
                 for (int i = 0; i < valInputs; i++)
-                    _output.Tap(valDirection);
+                    _realOutput.Tap(valDirection);
 
-                _output.Tap(Button.A);
-                _output.Delay(400); // wait for ui to close.
+                _realOutput.Tap(Button.A);
+                _realOutput.Delay(400); // wait for ui to close.
             }
 
             _lastColour = target;

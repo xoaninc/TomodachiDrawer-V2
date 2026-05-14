@@ -47,7 +47,7 @@ namespace TomodachiDrawer.Core
             [27] = 5,
         };
 
-        private readonly ISwitchOutput _output = output;
+        private readonly ISwitchOutput _realOutput = output;
 
         private void HomeToolbar(ISwitchOutput output)
         {
@@ -74,7 +74,7 @@ namespace TomodachiDrawer.Core
             _toolbarCurrentIndex = targetIndex;
         }
 
-        public bool SelectBrush(int brushSize) => SelectBrush(_output, brushSize);
+        public bool SelectBrush(int brushSize) => SelectBrush(_realOutput, brushSize);
 
         /// <returns>Whether or not it actually moved</returns>
         public bool SelectBrush(ISwitchOutput output, int brushSize)
@@ -141,7 +141,7 @@ namespace TomodachiDrawer.Core
             return true;
         }
 
-        public void SelectBucket() => SelectBucket(_output);
+        public void SelectBucket() => SelectBucket(_realOutput);
 
         /// <summary>Important note: Using the brush seems mildly laggy. Be generous with delays.</summary>
         public void SelectBucket(ISwitchOutput output)

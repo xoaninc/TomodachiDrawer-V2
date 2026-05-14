@@ -180,6 +180,8 @@ namespace TomodachiDrawer.Core
             {
                 layerNumber++;
 
+                _palette.SelectColour(l.Colour, 25.0);
+
                 // STAMPS
                 if (l.StampsBySize?.Count > 0)
                 {
@@ -191,7 +193,6 @@ namespace TomodachiDrawer.Core
                         int brushSize = sbs.Key;
 
                         _toolbar.SelectBrush(stampSink, brushSize);
-                        _palette.SelectColour(l.Colour, 25.0);
 
                         var dumbRoute = new List<CanvasPoint>(sbs.Value);
                         var pointCount = dumbRoute.Count;
@@ -219,7 +220,6 @@ namespace TomodachiDrawer.Core
                 if (l.FineDetailPoints.Count > 0)
                 {
                     _toolbar.SelectBrush(1); // no-op if already selected.
-                    _palette.SelectColour(l.Colour, 25.0); // no-op if already set by previous logic.
 
                     // Dry run both to get timing, TimingSink stores
                     // the outputs and time taken so it can be replayed without needing to rerun
@@ -275,7 +275,6 @@ namespace TomodachiDrawer.Core
                 {
                     _log($"\tPerforming bucket fills: {l.BucketClicks.Count} clicks");
 
-                    _palette.SelectColour(l.Colour, 25.0); // no-op if already set by previous logic.
                     _toolbar.SelectBucket();
                     // tsp solve the points
                     var bucketClickRouteTimeout = 0.25f;

@@ -294,8 +294,12 @@ namespace TomodachiDrawer.Core
 
         private bool _lastWasArbitrary = false;
 
+        private PaletteColour? _lastColour = null;
+
         public void SelectColour(PaletteColour target, double speed)
         {
+            if (_lastColour != null && _lastColour == target)
+                return;
             _output.Tap(Button.Y, speed, speed);
             _output.Delay(400); // wait for open
 
@@ -404,6 +408,8 @@ namespace TomodachiDrawer.Core
                 _output.Tap(Button.A);
                 _output.Delay(400); // wait for ui to close.
             }
+
+            _lastColour = target;
         }
 
         private static float ToLinear(byte srgb8)

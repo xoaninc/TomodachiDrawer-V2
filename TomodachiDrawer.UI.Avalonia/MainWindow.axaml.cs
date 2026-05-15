@@ -36,7 +36,7 @@ public partial class MainWindow : Window
     private bool BusyExporting = false;
     //private SwitchVersion _selectedSwitchVersion = SwitchVersion.None;
     //private int _selectedThemeIndex = 0; // 0 is System.
-    private AppSettings _currentSettings;
+    private AppSettings _currentSettings = new AppSettings(); // All cases will result in it being non-null but IntelliSense cant see that far.
 
     public MainWindow()
     {

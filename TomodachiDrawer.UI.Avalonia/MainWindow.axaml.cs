@@ -58,7 +58,7 @@ public partial class MainWindow : Window
 #if DEBUG
         this.Title = $"TomodachiDrawer.UI.Avalonia - {GetVersionString(true)}";
 #else
-        this.Title = $"TomodachiDrawer.UI.Avalonia - {GetVersionString(false)}";
+        this.Title = $"TomodachiDrawer - {GetVersionString(false)}";
 #endif
 
         StartRP2040Polling();
@@ -78,7 +78,7 @@ public partial class MainWindow : Window
         {
             if (includeCommit)
             {
-                return "dev-" + currentVersion.Split('+').Last();
+                return "dev+" + currentVersion.Split('+').Last();
             }
             else
             {
@@ -891,11 +891,9 @@ public partial class MainWindow : Window
         message += $"\nBuilt from commit: {commit}";
 
         message +=
-            $"\n\nCreated by Lucas7yoshi and contributors.\nThis project is Free and Open Source software licensed under the GPLv3.0 License."
+            $"\n\nCreated by Lucas7yoshi and contributors.\nThis project is Free and Open Source Software licensed under the GPLv3.0 License."
             + $"\nSource code is available on GitHub"
-            + $"\n\nThis program is in no way affiliated, endorsed, sponsored or created by Nintendo."
-            + $"\n\nCreated in Canada.";
-
+            + $"\n\nThis program is in no way affiliated, endorsed, sponsored or created by Nintendo.";
         _ = ShowMessageAsync("About TomodachiDrawer", message);
     }
 

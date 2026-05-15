@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
 		xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 		x:Class="TomodachiDrawer.UI.Avalonia.MainWindow"
+		Icon="/Assets/Icon.png"
 		Title="Tomodachi Drawer"
 		Width="1100" Height="760"
 		MinWidth="1100" MinHeight="760">

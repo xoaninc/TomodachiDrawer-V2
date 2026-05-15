@@ -444,6 +444,7 @@ public partial class MainWindow : Window
         ExportRP2040Button.IsEnabled = false;
         TimeSpan totalTime = TimeSpan.MaxValue;
         var settings = GetQuantizerSettings();
+        var enableExperimental = EnableExperimentalCheckBox.IsChecked ?? false;
 
         await Task.Run(async () =>
         {
@@ -457,7 +458,15 @@ public partial class MainWindow : Window
             var drawer = new CanvasDrawer(timingSink, _selectedSwitchVersion, AppendLog);
             drawer.ConnectAndConfirmController();
             AppendLog("Starting to generate inputs...");
-            await drawer.DrawImage(SKBitmap.Decode(imagePath), settings, denoiser, tspLimit, false);
+            var drawSettings = new DrawImageSettings()
+            {
+                QuantizerSettings = settings,
+                DenoiserName = denoiser,
+                TSPTimeLimit = tspLimit,
+                DisableLargeBrush = false,
+                EnableExperimentalFeatures = enableExperimental
+            };
+            await drawer.DrawImage(SKBitmap.Decode(imagePath), drawSettings);
             AppendLog($"True complete overall time is: {timingSink.TotalTime.TotalSeconds}s");
 
             var fileSink = new FileControllerSink(tempPath);
@@ -533,6 +542,7 @@ public partial class MainWindow : Window
         BusyExporting = true;
         TimeSpan totalTime = TimeSpan.MaxValue;
         var settings = GetQuantizerSettings();
+        var enableExperimental = EnableExperimentalCheckBox.IsChecked ?? false;
 
         await Task.Run(async () =>
         {
@@ -546,7 +556,15 @@ public partial class MainWindow : Window
             var drawer = new CanvasDrawer(timingSink, _selectedSwitchVersion, AppendLog);
             drawer.ConnectAndConfirmController();
             AppendLog("Starting to generate inputs...");
-            await drawer.DrawImage(SKBitmap.Decode(imagePath), settings, denoiser, tspLimit, false);
+            var drawSettings = new DrawImageSettings()
+            {
+                QuantizerSettings = settings,
+                DenoiserName = denoiser,
+                TSPTimeLimit = tspLimit,
+                DisableLargeBrush = false,
+                EnableExperimentalFeatures = enableExperimental
+            };
+            await drawer.DrawImage(SKBitmap.Decode(imagePath), drawSettings);
             AppendLog($"True complete overall time is: {timingSink.TotalTime.TotalSeconds}s");
 
             var fileSink = new FileControllerSink(tempPath);
@@ -720,6 +738,7 @@ public partial class MainWindow : Window
         {
             SelectedSwitchVersion = _selectedSwitchVersion,
             SelectedThemeIndex = _selectedThemeIndex,
+            EnableExperimentalFeatures = EnableExperimentalCheckBox.IsChecked ?? false
         };
 
         var json = JsonSerializer.Serialize(settings);
@@ -739,6 +758,7 @@ public partial class MainWindow : Window
                 {
                     _selectedSwitchVersion = settings.SelectedSwitchVersion;
                     _selectedThemeIndex = settings.SelectedThemeIndex;
+                    EnableExperimentalCheckBox.IsChecked = settings.EnableExperimentalFeatures;
                     return;
                 }
             }
@@ -757,6 +777,8 @@ public partial class MainWindow : Window
         public SwitchVersion SelectedSwitchVersion { get; init; }
 
         public int SelectedThemeIndex { get; init; }
+
+        public bool EnableExperimentalFeatures { get; init; } = false;
     }
 
     private void SwitchVersionComboBox_SelectionChanged(object? sender, SelectionChangedEventArgs e)
@@ -765,6 +787,19 @@ public partial class MainWindow : Window
             _selectedSwitchVersion = SwitchVersion.Switch1;
         else
             _selectedSwitchVersion = SwitchVersion.Switch2;
+        SaveSettings();
+    }
+
+    private void EnableExperimentalCheckBox_IsCheckedChanged(object? sender, RoutedEventArgs e)
+    {
+        if (EnableExperimentalCheckBox.IsChecked == true)
+        {
+            _ = ShowMessageAsync(
+                "Experimental Features",
+                "WARNING: Enabling experimental features may induce more common desyncs. Things that are prone to desyncs, but that are desired to be made stable are put here." +
+                "\nNamely, this includes bucket filling dynamic areas on the switch 2." +
+                "\nOnly enable this if you are okay with the increased chance of desyncs. Having this disabled does not guarantee it will work, but that is the goal and in 99% of cases it will work.");
+        }
         SaveSettings();
     }
     #endregion

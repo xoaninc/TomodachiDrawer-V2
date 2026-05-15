@@ -2,8 +2,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="TomodachiDrawer.UI.Avalonia.MainWindow"
         Title="Tomodachi Drawer"
-        Width="1100" Height="660"
-        MinWidth="1100" MinHeight="660">
+        Width="1100" Height="760"
+        MinWidth="1100" MinHeight="760">
 
     <Window.Styles>
         <Style Selector="Border.group">
@@ -87,6 +87,10 @@
                             <ComboBoxItem>Switch 2</ComboBoxItem>
                         </ComboBox>
                     </Grid>
+                    <CheckBox x:Name="EnableExperimentalCheckBox"
+                              Content="Enable Experimental (Possibly Desync Prone) Features" 
+                              IsCheckedChanged="EnableExperimentalCheckBox_IsCheckedChanged"
+                              />
                     <StackPanel Orientation="Horizontal" Spacing="6">
                         <TextBlock Text="TSP Solver Time Limit"
                                    VerticalAlignment="Center" />

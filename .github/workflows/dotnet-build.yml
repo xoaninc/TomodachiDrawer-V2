@@ -77,13 +77,15 @@ jobs:
           cd "$dir"
           echo "Zipping/Tarring ${dirname}"
           
+          outname="${dirname//osx/mac}"
+          
           if [[ "$dirname" == *"linux"* ]] || [[ "$dirname" == *"osx"* ]]; then
             echo "Linux/Mac .tar.gz"
             chmod +x TomodachiDrawer.UI.Avalonia
-            tar -czvf "../../final-packages/${dirname}-${{ github.ref_name }}.tar.gz" *
+            tar -czvf "../../final-packages/${outname}-${{ github.ref_name }}.tar.gz" *
           else
             echo "Windows .zip"
-            zip -r "../../final-packages/${dirname}-${{ github.ref_name }}.zip" .
+            zip -r "../../final-packages/${outname}-${{ github.ref_name }}.zip" .
           fi
           cd ../..
         done

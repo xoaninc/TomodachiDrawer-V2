@@ -69,7 +69,7 @@ jobs:
       with:
         path: unzipped-artifacts
         merge-multiple: false
-- name: Zip for Release
+    - name: Zip for Release
       run: |
         mkdir final-packages
         for dir in unzipped-artifacts/*/; do

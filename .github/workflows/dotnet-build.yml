@@ -90,17 +90,21 @@ jobs:
           if [[ "$dirname" == *"osx"* ]]; then
             echo "Mac .tar.gz (Creating .app bundle + README)"
             
-            # 1. Create App Structure
-            mkdir -p TomodachiDrawer.app/Contents/MacOS
+            # 1. Create a staging area outside the current folder to avoid recursion
+            STAGING="../${dirname}_staging"
+            mkdir -p "$STAGING/TomodachiDrawer.app/Contents/MacOS"
             
-            # 2. Move all files into the bundle
-            cp -r ./* TomodachiDrawer.app/Contents/MacOS/
+            # 2. Copy publish output to staging
+            cp -r ./* "$STAGING/TomodachiDrawer.app/Contents/MacOS/"
             
-            # 3. Rename executable to match Info.plist
+            # 3. Move to staging to finish the bundle
+            cd "$STAGING"
+            
+            # 4. Rename executable and fix permissions
             mv TomodachiDrawer.app/Contents/MacOS/TomodachiDrawer.UI.Avalonia TomodachiDrawer.app/Contents/MacOS/TomodachiDrawer
             chmod -R +x TomodachiDrawer.app/Contents/MacOS/
             
-            # 4. Create Info.plist
+            # 5. Create Info.plist
             echo '<?xml version="1.0" encoding="UTF-8"?>
             <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
             <plist version="1.0">
@@ -118,7 +122,7 @@ jobs:
             </dict>
             </plist>' > TomodachiDrawer.app/Contents/Info.plist
             
-            # 5. Create the Mac-specific README
+            # 6. Create the Mac-specific README
             echo "IMPORTANT NOTE: If you try and run the .app immediately after downloading it, Apple will claim its damaged. This is because its unsigned, since I don't own a mac.
             
             This is a security feature, you can help remedy this by launching Terminal, typing
@@ -129,8 +133,13 @@ jobs:
             
             and then after hitting enter, try opening the .app again." > README_MAC_USERS.txt
 
-            # 6. Tar the .app and the README together
+            # 7. Tar the bundle and readme (final-packages is two levels up from here)
             tar -czvf "../../final-packages/${outname}-${{ github.ref_name }}.tar.gz" TomodachiDrawer.app README_MAC_USERS.txt
+            
+            # 8. Clean up and return to the artifact loop
+            cd ..
+            rm -rf "${dirname}_staging"
+            cd "$dirname"
             
           elif [[ "$dirname" == *"linux"* ]]; then
             echo "Linux .tar.gz"

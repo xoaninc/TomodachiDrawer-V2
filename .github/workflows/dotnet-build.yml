@@ -32,7 +32,6 @@ jobs:
       run: dotnet build --configuration ${{ matrix.configuration }} --no-restore /p:EnableWindowsTargeting=true
     - name: Test
       run: dotnet test --configuration ${{ matrix.configuration }} --no-build --verbosity normal /p:EnableWindowsTargeting=true
-
   publish-avalonia:
     runs-on: ubuntu-latest
     needs: build
@@ -51,19 +50,12 @@ jobs:
         cache-dependency-path: '**/*.csproj'
     - name: Build
       working-directory: TomodachiDrawer.UI.Avalonia
-      # Only use PublishSingleFile if NOT osx
-      run: |
-        dotnet publish --configuration ${{ matrix.configuration }} \
-          -r ${{ matrix.runtime }} \
-          --self-contained \
-          ${{ !contains(matrix.runtime, 'osx') && '-p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true' || '-p:PublishReadyToRun=true' }} \
-          ${{ github.ref_type == 'tag' && format('-p:Version={0}', github.ref_name) || '' }}
+      run: dotnet publish --configuration ${{ matrix.configuration }} -r ${{ matrix.runtime }} --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true ${{ github.ref_type == 'tag' && format('-p:Version={0}', github.ref_name) || '' }}
     - name: Upload Artifacts
       uses: actions/upload-artifact@v7
       with:
         name: TomodachiDrawer-Avalonia-${{ matrix.runtime }}-${{ matrix.configuration }}
         path: TomodachiDrawer.UI.Avalonia/bin/${{ matrix.configuration }}/net10.0/${{ matrix.runtime }}/publish/
-
   release:
     name: Draft release
     runs-on: ubuntu-latest
@@ -77,7 +69,7 @@ jobs:
       with:
         path: unzipped-artifacts
         merge-multiple: false
-    - name: Zip for Release
+- name: Zip for Release
       run: |
         mkdir final-packages
         for dir in unzipped-artifacts/*/; do
@@ -87,25 +79,19 @@ jobs:
           cd "$dir"
           echo "Processing ${dirname} into ${outname}"
           
+          # osx is slop alert, because i do not have a mac and this is all a genuine mystery to me
           if [[ "$dirname" == *"osx"* ]]; then
-            echo "Mac .tar.gz (Creating .app bundle + README)"
+            echo "Mac .tar.gz (Creating .app bundle)"
             
-            # 1. Create a staging area outside the current folder to avoid recursion
-            STAGING="../${dirname}_staging"
-            mkdir -p "$STAGING/TomodachiDrawer.app/Contents/MacOS"
+            mkdir -p TomodachiDrawer.app/Contents/MacOS
             
-            # 2. Copy publish output to staging
-            cp -r ./* "$STAGING/TomodachiDrawer.app/Contents/MacOS/"
+            mv TomodachiDrawer.UI.Avalonia TomodachiDrawer.app/Contents/MacOS/TomodachiDrawer
+            chmod +x TomodachiDrawer.app/Contents/MacOS/TomodachiDrawer
             
-            # 3. Move to staging to finish the bundle
-            cd "$STAGING"
+            find . -maxdepth 1 -type f -exec mv {} TomodachiDrawer.app/Contents/MacOS/ \;
             
-            # 4. Rename executable and fix permissions
-            mv TomodachiDrawer.app/Contents/MacOS/TomodachiDrawer.UI.Avalonia TomodachiDrawer.app/Contents/MacOS/TomodachiDrawer
-            chmod -R +x TomodachiDrawer.app/Contents/MacOS/
-            
-            # 5. Create Info.plist
-            echo '<?xml version="1.0" encoding="UTF-8"?>
+            cat << 'EOF' > TomodachiDrawer.app/Contents/Info.plist
+            <?xml version="1.0" encoding="UTF-8"?>
             <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
             <plist version="1.0">
             <dict>
@@ -117,29 +103,11 @@ jobs:
                 <string>TomodachiDrawer</string>
                 <key>CFBundlePackageType</key>
                 <string>APPL</string>
-                <key>LSMinimumSystemVersion</key>
-                <string>10.12</string>
             </dict>
-            </plist>' > TomodachiDrawer.app/Contents/Info.plist
+            </plist>
+            EOF
             
-            # 6. Create the Mac-specific README
-            echo "IMPORTANT NOTE: If you try and run the .app immediately after downloading it, Apple will claim its damaged. This is because its unsigned, since I don't own a mac.
-            
-            This is a security feature, you can help remedy this by launching Terminal, typing
-            
-            xattr -cr
-            
-            dragging and dropping the .app into the terminal (which will paste the path), hitting enter
-            
-            and then after hitting enter, try opening the .app again." > README_MAC_USERS.txt
-
-            # 7. Tar the bundle and readme (final-packages is two levels up from here)
-            tar -czvf "../../final-packages/${outname}-${{ github.ref_name }}.tar.gz" TomodachiDrawer.app README_MAC_USERS.txt
-            
-            # 8. Clean up and return to the artifact loop
-            cd ..
-            rm -rf "${dirname}_staging"
-            cd "$dirname"
+            tar -czvf "../../final-packages/${outname}-${{ github.ref_name }}.tar.gz" TomodachiDrawer.app
             
           elif [[ "$dirname" == *"linux"* ]]; then
             echo "Linux .tar.gz"

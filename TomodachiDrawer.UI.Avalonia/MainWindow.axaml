@@ -22,7 +22,7 @@
 			<MenuItem Header="_File">
 				<MenuItem Header="_Save Preview..." Click="MenuSavePreview_Click"/>
 				<Separator/>
-				<MenuItem Header="_Exit"/>
+				<MenuItem Header="_Exit" Click="MenuExit_Click"/>
 			</MenuItem>
 			<MenuItem Header="_Settings" StaysOpenOnClick="True">
 				<MenuItem

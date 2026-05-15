@@ -1,7 +1,6 @@
 ﻿using System.Diagnostics;
 using Google.OrTools.ConstraintSolver;
 using SkiaSharp;
-
 using TomodachiDrawer.Core.ImageProcessing;
 using TomodachiDrawer.Core.ImageProcessing.Denoising;
 using TomodachiDrawer.Core.ImageProcessing.Quantizers;
@@ -25,7 +24,11 @@ namespace TomodachiDrawer.Core
         private readonly Action<string> _log;
         private readonly SwitchVersion _switchVersion;
 
-        public CanvasDrawer(ISwitchOutput outputSink, SwitchVersion switchVersion, Action<string>? logger = null)
+        public CanvasDrawer(
+            ISwitchOutput outputSink,
+            SwitchVersion switchVersion,
+            Action<string>? logger = null
+        )
         {
             _realOutput = outputSink;
             _palette = new(outputSink);
@@ -33,7 +36,10 @@ namespace TomodachiDrawer.Core
             _log = logger ?? Console.WriteLine;
 
             if (switchVersion == SwitchVersion.None)
-                throw new ArgumentOutOfRangeException(nameof(switchVersion), "Switch version must be set.");
+                throw new ArgumentOutOfRangeException(
+                    nameof(switchVersion),
+                    "Switch version must be set."
+                );
 
             _switchVersion = switchVersion;
         }
@@ -60,10 +66,7 @@ namespace TomodachiDrawer.Core
             }
         }
 
-        public async Task DrawImage(
-            SKBitmap image,
-            DrawImageSettings settings
-        )
+        public async Task DrawImage(SKBitmap image, DrawImageSettings settings)
         {
             if (image.Width > CanvasWidth || image.Height > CanvasHeight)
                 throw new InvalidDataException(
@@ -100,7 +103,6 @@ namespace TomodachiDrawer.Core
             // TODO: This doesnt really make too much sense to be in the palette class... Maybe move here?
             var layers = _palette.BuildFineLayers(quantizedMap);
 
-
             // If the image is 256x256 and has no transparent pixels at all we can use the bucket tool
             // for the most prevelant colour to save time.
             // This is done before the large brush detection to avoid needing to run stuff to count the large brush stuff to find the
@@ -110,7 +112,11 @@ namespace TomodachiDrawer.Core
             // This below uses the bucket on switch 2, but is generally stable enough since it is just a one off bucket use
             // that doesnt even move the cursor.
             // The dynamic bucket fill on the other hand is prone to desyncs even on switch 2, thus is classified as experimental.
-            if (_switchVersion == SwitchVersion.Switch2 && image.Width == 256 && image.Height == 256)
+            if (
+                _switchVersion == SwitchVersion.Switch2
+                && image.Width == 256
+                && image.Height == 256
+            )
             {
                 _log("Seeing if we can use the bucket to save time");
                 bool anyTransparent = false;
@@ -133,7 +139,9 @@ namespace TomodachiDrawer.Core
                     bucketColour = layers.MaxBy(l => l.FineDetailPoints.Count)!.Colour;
                     // We need to then remove it from the rest of the drawing so it doesnt draw it now.
                     layers.RemoveAll(l => l.Colour == bucketColour); // is only one but this is easiest.
-                    _log($"\tUsing bucket to fill most prevalent colour: {bucketColour.Value.DisplayName}");
+                    _log(
+                        $"\tUsing bucket to fill most prevalent colour: {bucketColour.Value.DisplayName}"
+                    );
                     _toolbar.SelectBucket();
                     _palette.SelectColour(bucketColour.Value, 25.0);
                     _realOutput.Tap(Button.A);
@@ -179,7 +187,6 @@ namespace TomodachiDrawer.Core
                     DetectUniformAreas(l, image.Width, image.Height);
                 }
             }
-
 
             double totalInLayerTime = 0.0;
 
@@ -290,7 +297,10 @@ namespace TomodachiDrawer.Core
                     var bucketClickRouteTimeout = 0.25f;
                     if (l.BucketClicks.Count > 50)
                         bucketClickRouteTimeout = 0.5f;
-                    var optimizedBucketClickRoute = PerformTSP(l.BucketClicks.ToList(), bucketClickRouteTimeout);
+                    var optimizedBucketClickRoute = PerformTSP(
+                        l.BucketClicks.ToList(),
+                        bucketClickRouteTimeout
+                    );
                     foreach (var click in optimizedBucketClickRoute ?? l.BucketClicks.ToList()) // in case somehow it fails
                     {
                         NavigateTo(_realOutput, click);
@@ -311,7 +321,12 @@ namespace TomodachiDrawer.Core
         // TODO: MORE WORK TWEAKING THESE!!!
         private static readonly int[] LargeBrushEvictionThreshold = [1, 1, 2, 6, 12];
 
-        public static int DetectBucketZones(ColourLayer l, int width, int height, int minZoneSize = 36)
+        public static int DetectBucketZones(
+            ColourLayer l,
+            int width,
+            int height,
+            int minZoneSize = 36
+        )
         {
             var workingSet = new bool[width, height];
 
@@ -384,7 +399,14 @@ namespace TomodachiDrawer.Core
                                 int tx = current.X + dx[i];
                                 int ty = current.Y + dy[i];
 
-                                if (tx >= 0 && tx < width && ty >= 0 && ty < height && interiorPixels[tx, ty] && !visited[tx, ty])
+                                if (
+                                    tx >= 0
+                                    && tx < width
+                                    && ty >= 0
+                                    && ty < height
+                                    && interiorPixels[tx, ty]
+                                    && !visited[tx, ty]
+                                )
                                 {
                                     visited[tx, ty] = true;
                                     q.Enqueue(new CanvasPoint(tx, ty));
@@ -409,12 +431,10 @@ namespace TomodachiDrawer.Core
             l.FineDetailPoints.Clear();
             l.FineDetailPoints.UnionWith(outlinePixels);
 
-
             l.BucketClicks = new HashSet<CanvasPoint>(bucketClicks);
 
             return l.BucketClicks.Count;
         }
-
 
         /// <summary>Takes in a ColourLayer and detects large areas that can be better drawn with stamps.</summary>
         /// <param name="l"></param>
@@ -482,7 +502,6 @@ namespace TomodachiDrawer.Core
                 _log($"\tFOUND {largeBrushPoints.Count} areas for size {brushSize}^2");
             }
         }
-
 
         private static bool IsUniformArea(bool[,] map, int cx, int cy, int brushSize)
         {

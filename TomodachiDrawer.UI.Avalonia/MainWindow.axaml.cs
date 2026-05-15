@@ -1,3 +1,5 @@
+using System.Reflection;
+using System.Text.Json;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -8,19 +10,12 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Styling;
 using Avalonia.Threading;
-
 using SkiaSharp;
-
-using System.Reflection;
-using System.Text.Json;
-
 using TomodachiDrawer.Core;
-using TomodachiDrawer.Core.ImageProcessing;
 using TomodachiDrawer.Core.ImageProcessing.Denoising;
 using TomodachiDrawer.Core.ImageProcessing.Quantizers;
 using TomodachiDrawer.Core.Models;
 using TomodachiDrawer.Core.OutputSinks;
-
 using Button = Avalonia.Controls.Button; // conflict with the Button enum in SinkEnums
 
 namespace TomodachiDrawer.UI.Avalonia;
@@ -32,11 +27,11 @@ public partial class MainWindow : Window
     private string _currentImagePath = string.Empty;
     private readonly CancellationTokenSource _cts = new();
 
-
     private bool BusyExporting = false;
+
     //private SwitchVersion _selectedSwitchVersion = SwitchVersion.None;
     //private int _selectedThemeIndex = 0; // 0 is System.
-    private AppSettings _currentSettings = new AppSettings(); // All cases will result in it being non-null but IntelliSense cant see that far.
+    private AppSettings _currentSettings = new(); // All cases will result in it being non-null but IntelliSense cant see that far.
 
     public MainWindow()
     {
@@ -56,7 +51,6 @@ public partial class MainWindow : Window
 
         GetSettings();
 
-        // this dont work
         DragDrop.SetAllowDrop(this, true);
         AddHandler(DragDrop.DropEvent, OnDrop);
         AddHandler(DragDrop.DragOverEvent, OnDragOver);
@@ -74,7 +68,12 @@ public partial class MainWindow : Window
 
     private static string GetVersionString(bool includeCommit)
     {
-        var currentVersion = Assembly.GetEntryAssembly()?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "dev";
+        var currentVersion =
+            Assembly
+                .GetEntryAssembly()
+                ?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+                ?.InformationalVersion
+            ?? "dev";
         if (currentVersion.StartsWith("0.0.0"))
         {
             if (includeCommit)
@@ -106,14 +105,17 @@ public partial class MainWindow : Window
             using var http = new HttpClient();
             http.DefaultRequestHeaders.UserAgent.ParseAdd($"TomodachiDrawer {ourVersion}");
 
-            using var response = await http.GetAsync("https://api.github.com/repos/Lucas7yoshi/TomodachiDrawer/releases/latest");
+            using var response = await http.GetAsync(
+                "https://api.github.com/repos/Lucas7yoshi/TomodachiDrawer/releases/latest"
+            );
             response.EnsureSuccessStatusCode();
             using var responseStream = await response.Content.ReadAsStreamAsync();
 
             using var responseJsonObject = JsonDocument.Parse(responseStream);
 
             // 0.0.0 format, no v, no -.
-            var releaseVersionTag = responseJsonObject.RootElement.GetProperty("tag_name").GetString() ?? "0.0.0";
+            var releaseVersionTag =
+                responseJsonObject.RootElement.GetProperty("tag_name").GetString() ?? "0.0.0";
 
             // see if its newer. TODO: Actually check that, only really effects using the artifacts from the release build before
             // i've published the release though.
@@ -123,11 +125,12 @@ public partial class MainWindow : Window
                 {
                     _ = ShowMessageAsync(
                         "Update available",
-                        "A new update is available on GitHub." +
-                        $"\nCurrent Version: {ourVersion}" +
-                        $"\nLatest Version: {releaseVersionTag}" +
-                        $"\n\nDownload at:\nhttps://github.com/Lucas7yoshi/TomodachiDrawer",
-                        new Uri("https://github.com/Lucas7yoshi/TomodachiDrawer/releases"), "Open Releases"
+                        "A new update is available on GitHub."
+                            + $"\nCurrent Version: {ourVersion}"
+                            + $"\nLatest Version: {releaseVersionTag}"
+                            + $"\n\nDownload at:\nhttps://github.com/Lucas7yoshi/TomodachiDrawer",
+                        new Uri("https://github.com/Lucas7yoshi/TomodachiDrawer/releases"),
+                        "Open Releases"
                     );
                 }
                 else
@@ -140,9 +143,7 @@ public partial class MainWindow : Window
         {
             AppendLog($"Failed to check for updates: {ex.Message}");
         }
-
     }
-
 
     protected override void OnClosed(System.EventArgs e)
     {
@@ -208,6 +209,7 @@ public partial class MainWindow : Window
             }
         });
     }
+
     #region Image/Preview
     private void LoadImage(string path)
     {
@@ -308,7 +310,12 @@ public partial class MainWindow : Window
     }
 
     // messagebox replacement
-    private async Task ShowMessageAsync(string title, string message, Uri? link = null, string? linkButtonText = null)
+    private async Task ShowMessageAsync(
+        string title,
+        string message,
+        Uri? link = null,
+        string? linkButtonText = null
+    )
     {
         var buttonRow = new StackPanel
         {
@@ -324,10 +331,7 @@ public partial class MainWindow : Window
             MinWidth = 80,
         };
 
-        var stack = new StackPanel()
-        {
-            Margin = new Thickness(16)
-        };
+        var stack = new StackPanel() { Margin = new Thickness(16) };
         buttonRow.Children.Add(okButton);
 
         Button? linkButton = null;
@@ -343,12 +347,15 @@ public partial class MainWindow : Window
             buttonRow.Children.Add(linkButton);
         }
 
-        stack.Children.Insert(0, new SelectableTextBlock
-        {
-            Text = message,
-            TextWrapping = TextWrapping.Wrap,
-            MaxWidth = 400,
-        });
+        stack.Children.Insert(
+            0,
+            new SelectableTextBlock
+            {
+                Text = message,
+                TextWrapping = TextWrapping.Wrap,
+                MaxWidth = 400,
+            }
+        );
         stack.Children.Add(buttonRow);
 
         var dialog = new Window
@@ -358,7 +365,7 @@ public partial class MainWindow : Window
             CanResize = false,
             Width = 440,
             SizeToContent = SizeToContent.Height,
-            Content = stack
+            Content = stack,
         };
 
         okButton.Click += (_, _) => dialog.Close();
@@ -434,9 +441,9 @@ public partial class MainWindow : Window
         {
             _ = ShowMessageAsync(
                 "Select Switch Version",
-                "For compatibility, you must select a switch version in the dropdown." +
-                "\n\nSwitch 1 is more prone to desyncs, so this avoids certain things that are particularly prone to desyncing." +
-                "\nPlease be aware that even with Switch 1 selected, desyncs are unfortunately expected due to inconsistent and unpredictable lag in the drawing UI."
+                "For compatibility, you must select a switch version in the dropdown."
+                    + "\n\nSwitch 1 is more prone to desyncs, so this avoids certain things that are particularly prone to desyncing."
+                    + "\nPlease be aware that even with Switch 1 selected, desyncs are unfortunately expected due to inconsistent and unpredictable lag in the drawing UI."
             );
             return;
         }
@@ -460,7 +467,11 @@ public partial class MainWindow : Window
 
             AppendLog($"Exporting to RP2040 flash ({Path.GetFileName(tempPath)})");
             var timingSink = new TimingSink();
-            var drawer = new CanvasDrawer(timingSink, _currentSettings.SelectedSwitchVersion, AppendLog);
+            var drawer = new CanvasDrawer(
+                timingSink,
+                _currentSettings.SelectedSwitchVersion,
+                AppendLog
+            );
             drawer.ConnectAndConfirmController();
             AppendLog("Starting to generate inputs...");
             var drawSettings = new DrawImageSettings()
@@ -469,7 +480,7 @@ public partial class MainWindow : Window
                 DenoiserName = denoiser,
                 TSPTimeLimit = tspLimit,
                 DisableLargeBrush = false,
-                EnableExperimentalFeatures = enableExperimental
+                EnableExperimentalFeatures = enableExperimental,
             };
             await drawer.DrawImage(SKBitmap.Decode(imagePath), drawSettings);
             AppendLog($"True complete overall time is: {timingSink.TotalTime.TotalSeconds}s");
@@ -516,9 +527,9 @@ public partial class MainWindow : Window
         {
             _ = ShowMessageAsync(
                 "Select Switch Version",
-                "For compatibility, you must select a switch version in the dropdown." +
-                "\n\nSwitch 1 is more prone to desyncs, so this avoids certain things that are particularly prone to desyncing." +
-                "\nPlease be aware that even with Switch 1 selected, desyncs are unfortunately expected due to inconsistent and unpredictable lag in the drawing UI."
+                "For compatibility, you must select a switch version in the dropdown."
+                    + "\n\nSwitch 1 is more prone to desyncs, so this avoids certain things that are particularly prone to desyncing."
+                    + "\nPlease be aware that even with Switch 1 selected, desyncs are unfortunately expected due to inconsistent and unpredictable lag in the drawing UI."
             );
             return;
         }
@@ -528,7 +539,8 @@ public partial class MainWindow : Window
             {
                 Title = "Save .UF2",
                 DefaultExtension = "uf2",
-                FileTypeChoices = [
+                FileTypeChoices =
+                [
                     new FilePickerFileType("UF2 Firmware Image") { Patterns = ["*.uf2"] },
                     new FilePickerFileType("All Files") { Patterns = ["*.*"] },
                 ],
@@ -558,7 +570,11 @@ public partial class MainWindow : Window
 
             AppendLog($"Exporting to UF2 ({Path.GetFileName(tempPath)})");
             var timingSink = new TimingSink();
-            var drawer = new CanvasDrawer(timingSink, _currentSettings.SelectedSwitchVersion, AppendLog);
+            var drawer = new CanvasDrawer(
+                timingSink,
+                _currentSettings.SelectedSwitchVersion,
+                AppendLog
+            );
             drawer.ConnectAndConfirmController();
             AppendLog("Starting to generate inputs...");
             var drawSettings = new DrawImageSettings()
@@ -567,7 +583,7 @@ public partial class MainWindow : Window
                 DenoiserName = denoiser,
                 TSPTimeLimit = tspLimit,
                 DisableLargeBrush = false,
-                EnableExperimentalFeatures = enableExperimental
+                EnableExperimentalFeatures = enableExperimental,
             };
             await drawer.DrawImage(SKBitmap.Decode(imagePath), drawSettings);
             AppendLog($"True complete overall time is: {timingSink.TotalTime.TotalSeconds}s");
@@ -605,9 +621,9 @@ public partial class MainWindow : Window
         {
             _ = ShowMessageAsync(
                 "Error flashing base firmware",
-                "For some reason could not locate TomodachiDrawer.Firmware.uf2" +
-                "\nPlease ensure that you extracted the program to a zip folder, and ran the executable from that extracted folder." +
-                "\nIf you can still not flash with this button, you can manually drag the TomodachiDrawer.Firmware.uf2 file to the RPI-RP2 drive on your system to flash it."
+                "For some reason could not locate TomodachiDrawer.Firmware.uf2"
+                    + "\nPlease ensure that you extracted the program to a zip folder, and ran the executable from that extracted folder."
+                    + "\nIf you can still not flash with this button, you can manually drag the TomodachiDrawer.Firmware.uf2 file to the RPI-RP2 drive on your system to flash it."
             );
             return;
         }
@@ -746,6 +762,7 @@ public partial class MainWindow : Window
         WriteIndented = false
 #endif
     };
+
     private void SaveSettings()
     {
         var json = JsonSerializer.Serialize(_currentSettings, _jsonOptions);
@@ -761,16 +778,17 @@ public partial class MainWindow : Window
                 var json = File.ReadAllText(SettingsFilePath);
                 var settings = JsonSerializer.Deserialize<AppSettings>(json);
 
-
                 if (settings != null)
                 {
                     _currentSettings = settings;
 
-                    SwitchVersionComboBox.SelectedIndex = (int)_currentSettings.SelectedSwitchVersion - 1;
+                    SwitchVersionComboBox.SelectedIndex =
+                        (int)_currentSettings.SelectedSwitchVersion - 1;
                     SetTheme(_currentSettings.SelectedThemeIndex);
                     AppThemeComboBox.SelectedIndex = _currentSettings.SelectedThemeIndex;
 
-                    EnableExperimentalCheckBox.IsChecked = _currentSettings.EnableExperimentalFeatures;
+                    EnableExperimentalCheckBox.IsChecked =
+                        _currentSettings.EnableExperimentalFeatures;
                     CheckForUpdatesCheckBox.IsChecked = _currentSettings.CheckForUpdatesOnStart;
                     return;
                 }
@@ -813,10 +831,12 @@ public partial class MainWindow : Window
         {
             _ = ShowMessageAsync(
                 "Experimental Features",
-                "WARNING: Enabling experimental features may induce more common desyncs. Things that are prone to desyncs, but that are desired to be made stable are put here." +
-                "\nNamely, this includes bucket filling dynamic areas on the switch 2." +
-                "\nOnly enable this if you are okay with the increased chance of desyncs. Having this disabled does not guarantee it will work, but that is the goal and in 99% of cases it will work.",
-                new Uri("https://github.com/Lucas7yoshi/TomodachiDrawer/issues/34"), "Open Experimental Feature Info");
+                "WARNING: Enabling experimental features may induce more common desyncs. Things that are prone to desyncs, but that are desired to be made stable are put here."
+                    + "\nNamely, this includes bucket filling dynamic areas on the switch 2."
+                    + "\nOnly enable this if you are okay with the increased chance of desyncs. Having this disabled does not guarantee it will work, but that is the goal and in 99% of cases it will work.",
+                new Uri("https://github.com/Lucas7yoshi/TomodachiDrawer/issues/34"),
+                "Open Experimental Feature Info"
+            );
         }
         _currentSettings.EnableExperimentalFeatures = EnableExperimentalCheckBox.IsChecked ?? true;
         SaveSettings();
@@ -827,6 +847,7 @@ public partial class MainWindow : Window
         _currentSettings.CheckForUpdatesOnStart = CheckForUpdatesCheckBox.IsChecked;
         SaveSettings();
     }
+
     private async void MenuSavePreview_Click(object? sender, RoutedEventArgs e)
     {
         if (string.IsNullOrEmpty(_currentImagePath))
@@ -839,8 +860,12 @@ public partial class MainWindow : Window
             {
                 Title = "Save preview .png",
                 DefaultExtension = "png",
-                FileTypeChoices = [
-                    new FilePickerFileType("Portable Network Graphics Image") { Patterns = ["*.png"] },
+                FileTypeChoices =
+                [
+                    new FilePickerFileType("Portable Network Graphics Image")
+                    {
+                        Patterns = ["*.png"],
+                    },
                     new FilePickerFileType("All Files") { Patterns = ["*.*"] },
                 ],
             }
@@ -865,11 +890,17 @@ public partial class MainWindow : Window
         var commit = GetVersionString(true).Split("+").Last();
         message += $"\nBuilt from commit: {commit}";
 
-        message += $"\n\nCreated by Lucas7yoshi and contributors.\nThis project is Free and Open Source software licensed under the GPLv3.0 License." +
-            $"\nSource code is available on GitHub" +
-            $"\n\nThis program is in no way affiliated, endorsed, sponsored or created by Nintendo." +
-            $"\n\nCreated in Canada.";
+        message +=
+            $"\n\nCreated by Lucas7yoshi and contributors.\nThis project is Free and Open Source software licensed under the GPLv3.0 License."
+            + $"\nSource code is available on GitHub"
+            + $"\n\nThis program is in no way affiliated, endorsed, sponsored or created by Nintendo."
+            + $"\n\nCreated in Canada.";
 
         _ = ShowMessageAsync("About TomodachiDrawer", message);
+    }
+
+    private void MenuExit_Click(object? sender, RoutedEventArgs e)
+    {
+        Close();
     }
 }

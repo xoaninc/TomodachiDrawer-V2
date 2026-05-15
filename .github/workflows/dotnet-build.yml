@@ -79,7 +79,7 @@ jobs:
           cd "$dir"
           echo "Processing ${dirname} into ${outname}"
           
-          # osx is slop alert, because i do not have a mac and this is all a genuine mystery to me
+          # slop alert, i dont have a mac and this is all a mystery to me so just trying...
           if [[ "$dirname" == *"osx"* ]]; then
             echo "Mac .tar.gz (Creating .app bundle)"
             
@@ -90,8 +90,7 @@ jobs:
             
             find . -maxdepth 1 -type f -exec mv {} TomodachiDrawer.app/Contents/MacOS/ \;
             
-            cat << 'EOF' > TomodachiDrawer.app/Contents/Info.plist
-            <?xml version="1.0" encoding="UTF-8"?>
+            echo '<?xml version="1.0" encoding="UTF-8"?>
             <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
             <plist version="1.0">
             <dict>
@@ -104,8 +103,7 @@ jobs:
                 <key>CFBundlePackageType</key>
                 <string>APPL</string>
             </dict>
-            </plist>
-            EOF
+            </plist>' > TomodachiDrawer.app/Contents/Info.plist
             
             tar -czvf "../../final-packages/${outname}-${{ github.ref_name }}.tar.gz" TomodachiDrawer.app
             

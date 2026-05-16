@@ -781,16 +781,6 @@ public partial class MainWindow : Window
                 if (settings != null)
                 {
                     _currentSettings = settings;
-
-                    SwitchVersionComboBox.SelectedIndex =
-                        (int)_currentSettings.SelectedSwitchVersion - 1;
-                    SetTheme(_currentSettings.SelectedThemeIndex);
-                    AppThemeComboBox.SelectedIndex = _currentSettings.SelectedThemeIndex;
-
-                    EnableExperimentalCheckBox.IsChecked =
-                        _currentSettings.EnableExperimentalFeatures;
-                    CheckForUpdatesCheckBox.IsChecked = _currentSettings.CheckForUpdatesOnStart;
-                    return;
                 }
             }
             catch (Exception)
@@ -800,7 +790,16 @@ public partial class MainWindow : Window
         }
 
         // if no images or we fail, fall to defaults in the appsettings class.
-        _currentSettings = new AppSettings();
+        _currentSettings ??= new AppSettings();
+
+        SwitchVersionComboBox.SelectedIndex =
+            (int)_currentSettings.SelectedSwitchVersion - 1;
+        SetTheme(_currentSettings.SelectedThemeIndex);
+        AppThemeComboBox.SelectedIndex = _currentSettings.SelectedThemeIndex;
+
+        EnableExperimentalCheckBox.IsChecked =
+            _currentSettings.EnableExperimentalFeatures;
+        CheckForUpdatesCheckBox.IsChecked = _currentSettings.CheckForUpdatesOnStart;
     }
 
     // TODO: replace _selectedSwitchVersion and _selectedThemeIndex with just a instance of

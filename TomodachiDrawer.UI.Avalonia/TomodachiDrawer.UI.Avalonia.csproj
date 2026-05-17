@@ -9,6 +9,8 @@
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <Version>0.0.0</Version>
     <ApplicationIcon>TomodachiDrawer.ico</ApplicationIcon>
+    <!-- suppress warning from Google.OrTools from trimming since we are rooting it. -->
+    <NoWarn>$(NoWarn);IL2104</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.0.3" />
@@ -35,6 +37,10 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
+  <Target Name="RemoveNativePdbs" AfterTargets="Publish">
+    <!-- Delete large native pdbs of minimal value -->
+    <Delete Files="$(PublishDir)libSkiaSharp.pdb;$(PublishDir)libHarfBuzzSharp.pdb" />
+  </Target>
   <!-- macOS .app bundling `-p:BundleMacOSApp=true` -->
   <PropertyGroup Condition="'$(BundleMacOSApp)' == 'true' And $(RuntimeIdentifier.StartsWith('osx'))">
     <SelfContained>true</SelfContained>

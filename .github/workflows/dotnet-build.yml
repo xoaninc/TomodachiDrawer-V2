@@ -54,7 +54,7 @@ jobs:
         dotnet publish --configuration ${{ matrix.configuration }} \
           -r ${{ matrix.runtime }} \
           --self-contained \
-          ${{ !contains(matrix.runtime, 'osx') && '-p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true' || '-p:BundleMacOSApp=true' }} \
+          ${{ !contains(matrix.runtime, 'osx') && '-p:PublishTrimmed=true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true' || '-p:BundleMacOSApp=true' }} \
           ${{ github.ref_type == 'tag' && format('-p:Version={0}', github.ref_name) || '' }}
     - name: Upload Artifacts
       uses: actions/upload-artifact@v7

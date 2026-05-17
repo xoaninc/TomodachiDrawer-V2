@@ -22,8 +22,8 @@ namespace TomodachiDrawer.UI.Avalonia;
 
 public partial class MainWindow : Window
 {
-    private const string SettingsFilePath = "settings.json";
-
+    private const string firmwareFileName = "TomodachiDrawer.Firmware.uf2";
+    
     private string _currentImagePath = string.Empty;
     private readonly CancellationTokenSource _cts = new();
 
@@ -612,12 +612,32 @@ public partial class MainWindow : Window
         SetEstimate(totalTime);
     }
 
+    private string GetBaseFirmwareFilePath()
+    {
+        // Check if we're running on macOS and the app is running from app bundle, not CLI.
+        var baseDirectory = AppContext.BaseDirectory;
+        if (OperatingSystem.IsMacOS() && baseDirectory.Contains(".app/Contents/MacOS"))
+        {
+            // In macOS, when you launch `.app` from Finder, the current working directory is root directory `/` (Gemini said),
+            // and the firmware file isn't located there (`/TomodachiDrawer.Firmware.uf2`).
+            // So we need to find the firmware file in the app bundle.
+            // `AppContext.BaseDirectory` resolves to `/path/to/TomodachiDrawer.app/Contents/MacOS/`, so we can get the path to the firmware file from there.
+            // The firmware file should locate at `/path/to/TomodachiDrawer.app/Contents/MacOS/TomodachiDrawer.Firmware.uf2`
+            return Path.Combine(baseDirectory, firmwareFileName);
+        }
+        else
+        {
+            // Simply use the file in current working directory
+            return firmwareFileName;
+        }
+    }
+
     private void FlashFirmwareButton_Click(object? sender, RoutedEventArgs e)
     {
-        const string firmwareFile = "TomodachiDrawer.Firmware.uf2";
+        var firmwareFilePath = GetBaseFirmwareFilePath();
         var drivePath = UF2Flasher.FindRP2040Drive();
 
-        if (!File.Exists(firmwareFile))
+        if (!File.Exists(firmwareFilePath))
         {
             _ = ShowMessageAsync(
                 "Error flashing base firmware",
@@ -633,7 +653,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        File.Copy(firmwareFile, Path.Combine(drivePath, firmwareFile), overwrite: true);
+        File.Copy(firmwareFilePath, Path.Combine(drivePath, firmwareFileName), overwrite: true);
 
         var timeout = System.DateTime.Now.AddSeconds(10);
         while (UF2Flasher.FindRP2040Drive() != null)
@@ -763,19 +783,48 @@ public partial class MainWindow : Window
 #endif
     };
 
+    private string GetSettingsFilePath()
+    {
+        const string settingsFileName = "settings.json";
+
+        // Check if we're running on macOS and the app is running from the app bundle, not CLI.
+        if (OperatingSystem.IsMacOS() && AppContext.BaseDirectory.Contains(".app/Contents/MacOS"))
+        {
+            // In macOS, when you launch `.app` from Finder, the current working directory is root directory `/` (Gemini said),
+            // which is read-only and not a good place to store our settings file.
+            // We need to place the settings file somewhere else.
+            // `~/Library/Application Support` is a common place to store app data on macOS (like `%APPDATA%` on Windows).
+            // So first, ensure `~/Library/Application Support/TomodachiDrawer` exists
+            var appDataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "TomodachiDrawer");
+            if (!Directory.Exists(appDataFolder))
+            {
+                Directory.CreateDirectory(appDataFolder);
+            }
+            // Returns `~/Library/Application Support/TomodachiDrawer/settings.json`
+            return Path.Combine(appDataFolder, settingsFileName);
+        }
+        else
+        {
+            // Simply place it in the current working directory
+            return settingsFileName;
+        }
+    }
+
     private void SaveSettings()
     {
         var json = JsonSerializer.Serialize(_currentSettings, _jsonOptions);
-        File.WriteAllText(SettingsFilePath, json);
+        File.WriteAllText(GetSettingsFilePath(), json);
     }
 
     private void GetSettings()
     {
-        if (File.Exists(SettingsFilePath))
+        var settingsFilePath =  GetSettingsFilePath();
+        
+        if (File.Exists(settingsFilePath))
         {
             try
             {
-                var json = File.ReadAllText(SettingsFilePath);
+                var json = File.ReadAllText(settingsFilePath);
                 var settings = JsonSerializer.Deserialize<AppSettings>(json);
 
                 if (settings != null)

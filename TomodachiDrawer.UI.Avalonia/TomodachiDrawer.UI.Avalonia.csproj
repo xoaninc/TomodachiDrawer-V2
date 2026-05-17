@@ -4,12 +4,11 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <Version>0.0.0</Version>
     <ApplicationIcon>TomodachiDrawer.ico</ApplicationIcon>
-    <!-- suppress warning from Google.OrTools from trimming since we are rooting it. -->
+	<!-- suppress warning from Google.OrTools from trimming since we are rooting it. -->
     <NoWarn>$(NoWarn);IL2104</NoWarn>
   </PropertyGroup>
   <ItemGroup>

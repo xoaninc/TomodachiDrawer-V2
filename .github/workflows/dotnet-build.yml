@@ -39,7 +39,7 @@ jobs:
       fail-fast: false
       matrix:
         configuration: [Release]
-        runtime: [win-x64, win-arm64, linux-x64, linux-arm64, osx-x64, osx-arm64]
+        runtime: [win-x64, linux-x64, linux-arm64, osx-x64, osx-arm64] # win-arm64 removed since Google.OrTools dont even ship it. How does that not give a build warning??
 
     steps:
     - uses: actions/checkout@v6

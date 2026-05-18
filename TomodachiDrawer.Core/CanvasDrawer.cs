@@ -718,10 +718,15 @@ namespace TomodachiDrawer.Core
             // Find start point, this logic will need adjusted in time
             // when we eventually reorder layers to be the most optimal.
 
-            var optimizedRoute = PerformTSP(l.FineDetailPoints.ToList(), timeLimitSeconds);
+            var pointsList = l.FineDetailPoints.ToList();
+
+            var optimizedRoute = PerformTSP(pointsList, timeLimitSeconds);
 
             if (optimizedRoute == null)
-                return;
+            {
+                _log($"\tTSP timed out. Performing naive routing for TSP instead...");
+                optimizedRoute = FineDetailRoughTSP(pointsList);
+            }
 
             // Navigate through the optimised route.
             // A is held across consecutive points that are exactly 1 step apart (Chebyshev == 1).
@@ -763,6 +768,78 @@ namespace TomodachiDrawer.Core
                     output.Tap(Button.A);
                 }
             }
+        }
+
+        /// <summary>Very rough TSP, one pass just repeatedly finds the closest point until its done. Fallback for FineDetailTsp if it times out</summary>
+        /// <param name="output"></param>
+        /// <param name="l">Colour layer to route</param>
+        /// <returns>Ordered list of points as the route</returns>
+        private List<CanvasPoint> FineDetailRoughTSP(List<CanvasPoint> inputPoints)
+        {
+#if DEBUG
+            var sw = Stopwatch.StartNew();
+#endif
+            var points = inputPoints.ToArray();
+
+            var ordered = new List<CanvasPoint>(points.Length);
+
+            if (inputPoints.Count == 0)
+            {
+                return ordered;
+            }
+            else if (inputPoints.Count == 1)
+            {
+                ordered.Add(points[0]);
+                return ordered;
+            }
+
+            var closestPointIndex = 0;
+            var closestPointDist = MeasureDistanceToFromCurrent(points[0].X, points[0].Y);
+            for (int i = 0; i < points.Length; i++)
+            {
+                var p = points[i];
+                var distance = MeasureDistanceToFromCurrent(p.X, p.Y);
+                if (distance < closestPointDist)
+                {
+                    closestPointIndex = i;
+                    closestPointDist = distance;
+                }
+            }
+
+            // We are just going to go to the nearest point repeatedly.
+            var currentIndex = closestPointIndex;
+            ordered.Add(points[currentIndex]);
+            var visited = new bool[points.Length];
+            visited[currentIndex] = true;
+
+            for (int i = 0; i < points.Length - 1; i++)
+            {
+                var cur = points[currentIndex];
+                int nearestIndex = -1;
+                int nearestDist = int.MaxValue;
+
+                for (int j = 0; j < points.Length; j++)
+                {
+                    if (visited[j])
+                        continue;
+                    int dist = Math.Max(Math.Abs(points[j].X - cur.X), Math.Abs(points[j].Y - cur.Y));
+                    if (dist < nearestDist)
+                    {
+                        nearestDist = dist;
+                        nearestIndex = j;
+                    }
+                }
+
+                visited[nearestIndex] = true;
+                ordered.Add(points[nearestIndex]);
+                currentIndex = nearestIndex;
+            }
+#if DEBUG
+            sw.Stop();
+            _log($"\tNaive TSP took {sw.ElapsedMilliseconds}ms");
+#endif
+
+            return ordered;
         }
 
         private List<CanvasPoint>? PerformTSP(List<CanvasPoint> inputPoints, float timeLimitSeconds)

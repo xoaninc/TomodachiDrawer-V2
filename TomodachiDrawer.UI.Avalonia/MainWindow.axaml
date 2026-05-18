@@ -3,8 +3,8 @@
 		x:Class="TomodachiDrawer.UI.Avalonia.MainWindow"
 		Icon="/Assets/Icon.png"
 		Title="Tomodachi Drawer"
-		Width="1100" Height="760"
-		MinWidth="1100" MinHeight="760">
+		Width="1100" Height="800"
+		MinWidth="1100" MinHeight="800">
 
 	<Window.Styles>
 		<Style Selector="Border.group">
@@ -150,6 +150,11 @@
 									Width="28"
 									Click="TSPHelpButton_Click" />
 						</StackPanel>
+						<CheckBox x:Name="EnableHomeCanvas"
+								  Content="Auto Home Canvas To Top Left"
+								  ToolTip.Tip="At the beginning, the program will zoom out, and set itself at the very very top left of the canvas. This is automatically checked for full size (256x256) images."
+								  IsCheckedChanged="EnableHomeCanvas_IsCheckedChanged"
+						/>
 					</StackPanel>
 				</Border>
 				<Border Grid.Row="3" Classes="group" Margin="0,0,0,6">

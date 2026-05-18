@@ -103,6 +103,13 @@ namespace TomodachiDrawer.Core
             // TODO: This doesnt really make too much sense to be in the palette class... Maybe move here?
             var layers = _palette.BuildFineLayers(quantizedMap);
 
+            // If we're a full size 256x256 image, or the user just asks for it, we'll home to 0,0 on the canvas automatically.
+            if (settings.HomeToTopLeft)
+            {
+                _log("Homing to top left");
+                _toolbar.HomeCanvasToTopLeft(_realOutput);
+            }
+
             // If the image is 256x256 and has no transparent pixels at all we can use the bucket tool
             // for the most prevelant colour to save time.
             // This is done before the large brush detection to avoid needing to run stuff to count the large brush stuff to find the

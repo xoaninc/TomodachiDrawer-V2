@@ -288,6 +288,13 @@ public partial class MainWindow : Window
         _currentImagePath = path;
         ImagePathBox.Text = path;
         ExportUF2Button.IsEnabled = true;
+
+        if (img.Width == 256 && img.Height == 256)
+        {
+            AppendLog("Image is full canvas size, so enabling auto home by default.\nYou can disable it if it causes you trouble and manually home before connecting.");
+            EnableHomeCanvas.IsChecked = true;
+        }
+
         UpdatePreview();
         TSPTimeLimitUpDown.Value = (decimal)
             CanvasDrawer.GetRecommendedTSPSolveTime(img.Width, img.Height);
@@ -491,6 +498,7 @@ public partial class MainWindow : Window
         TimeSpan totalTime = TimeSpan.MaxValue;
         var settings = GetQuantizerSettings();
         var enableExperimental = EnableExperimentalCheckBox.IsChecked ?? false;
+        var enableHome = EnableHomeCanvas.IsChecked ?? false;
 
         await Task.Run(async () =>
         {
@@ -515,6 +523,7 @@ public partial class MainWindow : Window
                 TSPTimeLimit = tspLimit,
                 DisableLargeBrush = false,
                 EnableExperimentalFeatures = enableExperimental,
+                HomeToTopLeft = enableHome,
             };
             await drawer.DrawImage(SKBitmap.Decode(imagePath), drawSettings);
             AppendLog($"True complete overall time is: {timingSink.TotalTime.TotalSeconds}s");
@@ -968,4 +977,9 @@ public partial class MainWindow : Window
     private void MenuHelpOpenWelcome_Click(object? sender, RoutedEventArgs e) => ShowWelcomeMessage();
 
     private void MenuHelpCheckForUpdate_Click(object? sender, RoutedEventArgs e) => _ = PerformAsyncUpdateCheck();
+
+    private void EnableHomeCanvas_IsCheckedChanged(object? sender, RoutedEventArgs e)
+    {
+        // TODO: Notify if non 256x256 image.
+    }
 }

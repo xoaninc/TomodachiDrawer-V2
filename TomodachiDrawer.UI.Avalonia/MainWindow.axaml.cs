@@ -52,6 +52,17 @@ public partial class MainWindow : Window
 
         GetSettings();
 
+        if (!_currentSettings.SeenFirstStart)
+        {
+            _ = ShowMessageAsync(
+                "Welcome to TomodachiDrawer", 
+                "As of 0.4.7, the Base Firmware has been tweaked to fix a slowdown introduced in 0.3.3." +
+                "You are encouraged to hit the Flash Base Firmware button again if you flashed prior to this, its harmless if you aren't sure. " +
+                "If this is your first time using TomodachiDrawer, you do not need to worry about this. " +
+                "\n\nHappy (computer assisted) drawing!"
+            );
+        }
+
         DragDrop.SetAllowDrop(this, true);
         AddHandler(DragDrop.DropEvent, OnDrop);
         AddHandler(DragDrop.DragOverEvent, OnDragOver);

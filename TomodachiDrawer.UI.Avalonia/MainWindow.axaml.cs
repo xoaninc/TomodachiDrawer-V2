@@ -1102,21 +1102,24 @@ public partial class MainWindow : Window
         var settings = GetQuantizerSettings();
         var enableExperimental = EnableExperimentalMenuItem.IsChecked;
 
-        using var img = imageSnapshot;
-        var drawer = new CanvasDrawer(
-            new VirtualGamepadSink(_virtualGamepadController),
-            _currentSettings.SelectedSwitchVersion,
-            AppendLog
-        );
-        var drawSettings = new DrawImageSettings()
+        await Task.Run(async () =>
         {
-            QuantizerSettings = settings,
-            DenoiserName = denoiser,
-            TSPTimeLimit = tspLimit,
-            DisableLargeBrush = false,
-            EnableExperimentalFeatures = enableExperimental,
-        };
-        await drawer.DrawImage(img, drawSettings);
+            using var img = imageSnapshot;
+            var drawer = new CanvasDrawer(
+                new VirtualGamepadSink(_virtualGamepadController),
+                _currentSettings.SelectedSwitchVersion,
+                AppendLog
+            );
+            var drawSettings = new DrawImageSettings()
+            {
+                QuantizerSettings = settings,
+                DenoiserName = denoiser,
+                TSPTimeLimit = tspLimit,
+                DisableLargeBrush = false,
+                EnableExperimentalFeatures = enableExperimental,
+            };
+            await drawer.DrawImage(img, drawSettings);
+        });
 
         AppendLog("Done!");
     }

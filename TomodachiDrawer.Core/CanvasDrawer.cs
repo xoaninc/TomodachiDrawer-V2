@@ -481,7 +481,7 @@ namespace TomodachiDrawer.Core
             // When we find a good stampable area, we need to remove it from consideration (from the bool[,] array)
             // and also remove those points from the fine detail pass.
 
-            l.StampsBySize = new Dictionary<int, List<CanvasPoint>>();
+            l.StampsBySize = [];
 
             _log($"Scanning {l.Colour.DisplayName} for large brush");
 

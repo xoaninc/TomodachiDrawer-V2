@@ -13,7 +13,7 @@ internal class AppSettings
 
     public bool CheckForUpdatesOnStart { get; set; } = true;
 
-    public bool SeenFirstStart { get; set; } = false;
+    public int FirstStartId { get; set; } = 0;
 }
 
 // Source gen serialization to avoid trimming warnings.

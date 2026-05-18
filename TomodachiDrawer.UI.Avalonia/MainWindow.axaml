@@ -44,6 +44,16 @@
 					Header="_Open GitHub Repo"
 					Click="MenuHelpOpenGitHub_Click"
 				/>
+				<MenuItem
+					x:Name="MenuHelpOpenWelcome"
+					Header="_Show Welcome Again"
+					Click="MenuHelpOpenWelcome_Click"
+				/>
+				<MenuItem
+					x:Name="MenuHelpCheckForUpdate"
+					Header="Check For Update"
+					Click="MenuHelpCheckForUpdate_Click"
+				/>
 				<Separator/>
 				<MenuItem
 					x:Name="MenuHelpAbout"

@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -11,12 +12,15 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Styling;
 using Avalonia.Threading;
+
 using SkiaSharp;
+
 using TomodachiDrawer.Core;
 using TomodachiDrawer.Core.ImageProcessing.Denoising;
 using TomodachiDrawer.Core.ImageProcessing.Quantizers;
 using TomodachiDrawer.Core.Models;
 using TomodachiDrawer.Core.OutputSinks;
+
 using Button = Avalonia.Controls.Button; // conflict with the Button enum in SinkEnums
 
 namespace TomodachiDrawer.UI.Avalonia;
@@ -24,7 +28,7 @@ namespace TomodachiDrawer.UI.Avalonia;
 public partial class MainWindow : Window
 {
     private const string firmwareFileName = "TomodachiDrawer.Firmware.uf2";
-    
+
     private string _currentImagePath = string.Empty;
     private readonly CancellationTokenSource _cts = new();
 
@@ -52,16 +56,7 @@ public partial class MainWindow : Window
 
         GetSettings();
 
-        if (!_currentSettings.SeenFirstStart)
-        {
-            _ = ShowMessageAsync(
-                "Welcome to TomodachiDrawer", 
-                "As of 0.4.7, the Base Firmware has been tweaked to fix a slowdown introduced in 0.3.3." +
-                "You are encouraged to hit the Flash Base Firmware button again if you flashed prior to this, its harmless if you aren't sure. " +
-                "If this is your first time using TomodachiDrawer, you do not need to worry about this. " +
-                "\n\nHappy (computer assisted) drawing!"
-            );
-        }
+
 
         DragDrop.SetAllowDrop(this, true);
         AddHandler(DragDrop.DropEvent, OnDrop);
@@ -76,6 +71,33 @@ public partial class MainWindow : Window
         StartRP2040Polling();
         if (CheckForUpdatesCheckBox.IsChecked)
             _ = PerformAsyncUpdateCheck();
+
+
+        if (_currentSettings.FirstStartId != CURRENT_WELCOME_ID)
+        {
+            Opened += MainWindow_Opened;
+        }
+    }
+
+    private async void MainWindow_Opened(object? sender, EventArgs e)
+    {
+        ShowWelcomeMessage();
+        _currentSettings.FirstStartId = CURRENT_WELCOME_ID;
+        SaveSettings();
+    }
+
+    // Welcome message stuff. For important changes, the ID is incremented by one by hand whenever something notable changes.
+    // This is only really needed for Mac since its settings are saved in a way that persists more readily.
+    private const int CURRENT_WELCOME_ID = 1;
+    private async void ShowWelcomeMessage()
+    {
+        await ShowMessageAsync(
+            "Welcome to TomodachiDrawer",
+            "As of 0.4.7, the Base Firmware has been tweaked to fix a slowdown introduced in 0.3.3. " +
+            "You are encouraged to hit the Flash Base Firmware button again if you flashed prior to this, its harmless if you aren't sure. " +
+            "\nIf this is your first time using TomodachiDrawer, you do not need to worry about this. " +
+            "\n\nHappy (computer assisted) drawing!"
+        );
     }
 
     private static string GetVersionString(bool includeCommit)
@@ -821,8 +843,8 @@ public partial class MainWindow : Window
 
     private void GetSettings()
     {
-        var settingsFilePath =  GetSettingsFilePath();
-        
+        var settingsFilePath = GetSettingsFilePath();
+
         if (File.Exists(settingsFilePath))
         {
             try
@@ -942,7 +964,8 @@ public partial class MainWindow : Window
     {
         Close();
     }
+
+    private void MenuHelpOpenWelcome_Click(object? sender, RoutedEventArgs e) => ShowWelcomeMessage();
+
+    private void MenuHelpCheckForUpdate_Click(object? sender, RoutedEventArgs e) => _ = PerformAsyncUpdateCheck();
 }
-
-// To avoid trimming errors...
-

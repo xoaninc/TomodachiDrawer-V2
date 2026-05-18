@@ -310,16 +310,36 @@ namespace TomodachiDrawer.Core
                 }
             }
             _log(
-                $"Done! Total in layer draw time: {totalInLayerTime:F3}s (Doesnt include colour/brush selection)"
+                $"Done routing!"
             );
         }
 
         private static readonly int[] LargeBrushSizes = [27, 19, 13, 7, 3];
 
-        // eviction thresholds are how many of that size there must be for it to commit to doing larger brushes over smaller ones.
-        // bigger ones fill more area so they get more slack.
-        // TODO: MORE WORK TWEAKING THESE!!!
-        private static readonly int[] LargeBrushEvictionThreshold = [1, 1, 2, 6, 12];
+        // Various thresholds for eviction, based on image size.
+
+        private static readonly int[] LargeBrushEvictionThreshold_200 = [1, 1, 3, 12, 24];
+        private static readonly int[] LargeBrushEvictionThreshold_128 = [1, 1, 2, 7, 12];
+        private static readonly int[] LargeBrushEvictionThreshold_64OrLess = [1, 1, 1, 3, 6];
+
+        /// <summary>Indicates whether a set of brushes should be evicted based on image size, brush size, and count of them.</summary>
+        /// <param name="width">Image width in pixels</param>
+        /// <param name="height">Image height in pixels</param>
+        /// <param name="size">Size of brush in pixels, squared. Mapped through <see cref="LargeBrushSizes"/></param>
+        /// <param name="count">Number of instances of that brush size</param>
+        /// <returns></returns>
+        private static bool ShouldEvictBrushes(int width, int height, int size, int count)
+        {
+            int pixelCount = width * height;
+            int index = Array.IndexOf(LargeBrushSizes, size);
+
+            if (pixelCount <= 64 * 64)
+                return count < LargeBrushEvictionThreshold_64OrLess[index];
+            else if (pixelCount <= 128 * 128)
+                return count < LargeBrushEvictionThreshold_128[index];
+            else
+                return count < LargeBrushEvictionThreshold_200[index];
+        }
 
         public static int DetectBucketZones(
             ColourLayer l,
@@ -482,10 +502,7 @@ namespace TomodachiDrawer.Core
                     continue;
 
                 // Evict lone stamps or small amounts of them
-                // The overhead of going to them is generally not worth it.
-
-                int indexOfBrushSize = Array.IndexOf(LargeBrushSizes, brushSize);
-                if (largeBrushPoints.Count < LargeBrushEvictionThreshold[indexOfBrushSize])
+                if (ShouldEvictBrushes(width, height, brushSize, largeBrushPoints.Count))
                 {
                     _log(
                         $"\tEVICTED {largeBrushPoints.Count} areas for size {brushSize}^2 because too few."

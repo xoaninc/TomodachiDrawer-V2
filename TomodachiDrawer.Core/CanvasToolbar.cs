@@ -152,6 +152,8 @@ namespace TomodachiDrawer.Core
 
                 // Go to the square brush area, at the 1 pixel brush.
                 output.Tap(DPad.DOWN);
+                output.Tap(Button.A); // Select a brush that we dont actually use so we KNOW we will need two A presses. avoids a accidental click through draw
+                output.Delay(200);
                 output.Tap(DPad.DOWN);
                 currentColumn = 0;
             }

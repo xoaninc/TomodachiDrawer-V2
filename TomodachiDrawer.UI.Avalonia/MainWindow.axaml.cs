@@ -731,6 +731,7 @@ public partial class MainWindow : Window
         TimeSpan totalTime = TimeSpan.MaxValue;
         var settings = GetQuantizerSettings();
         var enableExperimental = EnableExperimentalMenuItem.IsChecked;
+        var enableHome = EnableHomeCanvas.IsChecked ?? false;
 
         await Task.Run(async () =>
         {
@@ -756,6 +757,7 @@ public partial class MainWindow : Window
                 TSPTimeLimit = tspLimit,
                 DisableLargeBrush = false,
                 EnableExperimentalFeatures = enableExperimental,
+                HomeToTopLeft = enableHome,
             };
             await drawer.DrawImage(img, drawSettings);
             AppendLog($"True complete overall time is: {timingSink.TotalTime.TotalSeconds}s");

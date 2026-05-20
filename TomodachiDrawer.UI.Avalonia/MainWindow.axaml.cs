@@ -12,9 +12,6 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Styling;
 using Avalonia.Threading;
-using Nefarius.ViGEm.Client;
-using Nefarius.ViGEm.Client.Exceptions;
-using Nefarius.ViGEm.Client.Targets;
 using SkiaSharp;
 
 using TomodachiDrawer.Core;
@@ -85,8 +82,8 @@ public partial class MainWindow : Window
         if (CheckForUpdatesCheckBox.IsChecked)
             _ = PerformAsyncUpdateCheck();
 
-            Opened += MainWindow_Opened;
-        }
+        Opened += MainWindow_Opened;
+    }
 
     private void InitializeTemplates()
     {
@@ -133,10 +130,10 @@ public partial class MainWindow : Window
     {
         if (_currentSettings.FirstStartId != CURRENT_WELCOME_ID)
         {
-        ShowWelcomeMessage();
-        _currentSettings.FirstStartId = CURRENT_WELCOME_ID;
-        SaveSettings();
-    }
+            ShowWelcomeMessage();
+            _currentSettings.FirstStartId = CURRENT_WELCOME_ID;
+            SaveSettings();
+        }
 
 #if DEBUG
         InsertDebugMenuItems();

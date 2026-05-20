@@ -1145,6 +1145,7 @@ public partial class MainWindow : Window
         var tspLimit = (float)(TSPTimeLimitUpDown.Value ?? 0.5m);
         var settings = GetQuantizerSettings();
         var enableExperimental = EnableExperimentalMenuItem.IsChecked;
+        var enableHome = EnableHomeCanvas.IsChecked ?? false;
 
         await Task.Run(async () =>
         {
@@ -1161,6 +1162,7 @@ public partial class MainWindow : Window
                 TSPTimeLimit = tspLimit,
                 DisableLargeBrush = false,
                 EnableExperimentalFeatures = enableExperimental,
+                HomeToTopLeft = enableHome,
             };
             await drawer.DrawImage(img, drawSettings);
         });

@@ -24,7 +24,7 @@ using TomodachiDrawer.Core.ImageProcessing.Denoising;
 using TomodachiDrawer.Core.ImageProcessing.Quantizers;
 using TomodachiDrawer.Core.Models;
 using TomodachiDrawer.Core.OutputSinks;
-
+using TomodachiDrawer.DebugTools;
 using Button = Avalonia.Controls.Button; // conflict with the Button enum in SinkEnums
 
 namespace TomodachiDrawer.UI.Avalonia;
@@ -43,9 +43,13 @@ public partial class MainWindow : Window
     //private int _selectedThemeIndex = 0; // 0 is System.
     private AppSettings _currentSettings = new(); // All cases will result in it being non-null but IntelliSense cant see that far.
 
-    private ViGEmClient? _virtualGamepadClient;
-    private IXbox360Controller? _virtualGamepadController = null;
-    private bool _isVirtualGamepadControllerConnected = false;
+#if DEBUG
+    private readonly VirtualGamepad _debugVirtualGamepad = new();
+
+    private MenuItem? MenuDebugConnectVirtualGamepad;
+    private MenuItem? MenuDebugRunInVirtualGamepad;
+    private MenuItem? MenuDebugOpenVirtualGamepadController;
+#endif
 
     public MainWindow()
     {
@@ -81,12 +85,8 @@ public partial class MainWindow : Window
         if (CheckForUpdatesCheckBox.IsChecked)
             _ = PerformAsyncUpdateCheck();
 
-
-        if (_currentSettings.FirstStartId != CURRENT_WELCOME_ID)
-        {
             Opened += MainWindow_Opened;
         }
-    }
 
     private void InitializeTemplates()
     {
@@ -131,9 +131,16 @@ public partial class MainWindow : Window
 
     private async void MainWindow_Opened(object? sender, EventArgs e)
     {
+        if (_currentSettings.FirstStartId != CURRENT_WELCOME_ID)
+        {
         ShowWelcomeMessage();
         _currentSettings.FirstStartId = CURRENT_WELCOME_ID;
         SaveSettings();
+    }
+
+#if DEBUG
+        InsertDebugMenuItems();
+#endif
     }
 
     // Welcome message stuff. For important changes, the ID is incremented by one by hand whenever something notable changes.
@@ -173,6 +180,41 @@ public partial class MainWindow : Window
         }
         return currentVersion;
     }
+
+#if DEBUG
+    private void InsertDebugMenuItems()
+    {
+        var debugMenuItem = new MenuItem()
+        {
+            Header = "_Debug",
+        };
+        Menu.Items.Add(debugMenuItem);
+
+        MenuDebugConnectVirtualGamepad = new MenuItem()
+        {
+            Header = "_Connect Virtual Gamepad",
+        };
+        MenuDebugConnectVirtualGamepad.Click += MenuDebugConnectVirtualGamepad_Click;
+        debugMenuItem.Items.Add(MenuDebugConnectVirtualGamepad);
+
+        MenuDebugRunInVirtualGamepad = new MenuItem()
+        {
+            Header = "_Run in Virtual Gamepad",
+            IsEnabled = false,
+        };
+        MenuDebugRunInVirtualGamepad.Click += MenuDebugRunInVirtualGamepad_Click;
+        debugMenuItem.Items.Add(MenuDebugRunInVirtualGamepad);
+
+        MenuDebugOpenVirtualGamepadController = new MenuItem()
+        {
+            Header = "_Control Virtual Gamepad",
+            IsEnabled = false,
+        };
+        MenuDebugOpenVirtualGamepadController.Click += MenuDebugOpenVirtualGamepadController_Click;
+        debugMenuItem.Items.Add(MenuDebugOpenVirtualGamepadController);
+
+    }
+#endif
 
     private async Task PerformAsyncUpdateCheck()
     {
@@ -1046,13 +1088,16 @@ public partial class MainWindow : Window
     private void MenuToolsOpenColourToHSVStepsTool_Click(object? sender, RoutedEventArgs e) =>
         new ColourToHSVStepsTool().Show(this);
 
+#if DEBUG
     private void MenuDebugConnectVirtualGamepad_Click(object? sender, RoutedEventArgs e)
     {
-        try
-        {
-            _virtualGamepadClient ??= new();
-        }
-        catch (VigemBusNotFoundException)
+        if (
+            MenuDebugConnectVirtualGamepad == null
+            || MenuDebugRunInVirtualGamepad == null
+            || MenuDebugOpenVirtualGamepadController == null
+        ) return;
+
+        if (!_debugVirtualGamepad.CheckDriver())
         {
             _ = ShowMessageAsync(
                 "ViGEmBus driver not found",
@@ -1063,27 +1108,26 @@ public partial class MainWindow : Window
             return;
         }
 
-        _virtualGamepadController ??= _virtualGamepadClient.CreateXbox360Controller();
-
-        if (!_isVirtualGamepadControllerConnected)
+        if (!_debugVirtualGamepad.IsConnected)
         {
-            _virtualGamepadController.Connect();
-            _isVirtualGamepadControllerConnected = true;
+            _debugVirtualGamepad.Connect();
             MenuDebugConnectVirtualGamepad.Header = "Disconnect Virtual Gamepad";
         }
         else
         {
             MenuDebugConnectVirtualGamepad.Header = "Re-connect Virtual Gamepad";
-            _virtualGamepadController.Disconnect();
-            _isVirtualGamepadControllerConnected = false;
+            _debugVirtualGamepad.Disconnect();
         }
 
-        MenuDebugRunInVirtualGamepad.IsEnabled = _isVirtualGamepadControllerConnected;
-        MenuDebugOpenVirtualGamepadController.IsEnabled = _isVirtualGamepadControllerConnected;
+        MenuDebugRunInVirtualGamepad.IsEnabled = _debugVirtualGamepad.IsConnected;
+        MenuDebugOpenVirtualGamepadController.IsEnabled = _debugVirtualGamepad.IsConnected;
     }
 
-    private async void MenuDebugRunInVirtualGamepadButton_Click(object sender, RoutedEventArgs e)
+    private async void MenuDebugRunInVirtualGamepad_Click(object? sender, RoutedEventArgs e)
     {
+        if (!_debugVirtualGamepad.IsConnected)
+            return;
+
         if (string.IsNullOrEmpty(_currentImagePath))
         {
             _ = ShowMessageAsync(
@@ -1106,7 +1150,7 @@ public partial class MainWindow : Window
         {
             using var img = imageSnapshot;
             var drawer = new CanvasDrawer(
-                new VirtualGamepadSink(_virtualGamepadController),
+                new VirtualGamepadSink(_debugVirtualGamepad),
                 _currentSettings.SelectedSwitchVersion,
                 AppendLog
             );
@@ -1124,17 +1168,18 @@ public partial class MainWindow : Window
         AppendLog("Done!");
     }
 
-    private void MenuDebugOpenVirtualGamepadControllerButton_Click(object sender, RoutedEventArgs e)
+    private void MenuDebugOpenVirtualGamepadController_Click(object? sender, RoutedEventArgs e)
     {
-        if (_virtualGamepadController == null)
+        if (!_debugVirtualGamepad.IsConnected)
             return;
 
         var window = new VirtualGamepadController
         {
-            GamepadController = _virtualGamepadController
+            VirtualGamepad = _debugVirtualGamepad
         };
         window.Show(this);
     }
+#endif
 
     private void MenuHelpOpenGitHub_Click(object? sender, RoutedEventArgs e) =>
         Launcher.LaunchUriAsync(new Uri("https://github.com/Lucas7yoshi/TomodachiDrawer"));

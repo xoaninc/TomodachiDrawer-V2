@@ -1,6 +1,7 @@
 ﻿using Nefarius.ViGEm.Client.Targets;
 using Nefarius.ViGEm.Client.Targets.Xbox360;
 using TomodachiDrawer.Core.Interfaces;
+using TomodachiDrawer.DebugTools;
 
 namespace TomodachiDrawer.Core.OutputSinks
 {
@@ -8,9 +9,18 @@ namespace TomodachiDrawer.Core.OutputSinks
     {
         private readonly IXbox360Controller _gamepad;
 
-        public VirtualGamepadSink(IXbox360Controller gamepad)
+        public VirtualGamepadSink(VirtualGamepad gamepad)
         {
-            _gamepad = gamepad;
+            if (gamepad.Controller == null || !gamepad.IsConnected)
+            {
+                throw new ArgumentException(
+                    "Virtual Gamepad is not connected",
+                    nameof(gamepad)
+                );
+            }
+
+            _gamepad = gamepad.Controller;
+
             ReleaseAll();
         }
 

@@ -1,15 +1,14 @@
 using Avalonia.Controls;
 using Avalonia.Input;
-using HarfBuzzSharp;
-using Nefarius.ViGEm.Client.Targets;
 using Nefarius.ViGEm.Client.Targets.Xbox360;
+using TomodachiDrawer.DebugTools;
 using Key = Avalonia.Input.Key;
 
 namespace TomodachiDrawer.UI.Avalonia;
 
 public partial class VirtualGamepadController : Window
 {
-    public IXbox360Controller? GamepadController = null;
+    public required VirtualGamepad VirtualGamepad;
     private string? _currentStickFreeStyle = null;
 
     public VirtualGamepadController()
@@ -30,7 +29,7 @@ public partial class VirtualGamepadController : Window
 
     private async void HandlePressOrRelease(string tag, bool pressed)
     {
-        if (GamepadController == null)
+        if (VirtualGamepad.Controller == null)
             return;
 
         Xbox360Button? xboxBtn = tag switch
@@ -51,7 +50,7 @@ public partial class VirtualGamepadController : Window
         };
         if (xboxBtn != null)
         {
-            GamepadController.SetButtonState(xboxBtn, pressed);
+            VirtualGamepad.Controller.SetButtonState(xboxBtn, pressed);
             return;
         }
 
@@ -63,7 +62,7 @@ public partial class VirtualGamepadController : Window
         };
         if (xboxSlider != null)
         {
-            GamepadController.SetSliderValue(xboxSlider, (byte)(pressed ? 0xFF : 0x00));
+            VirtualGamepad.Controller.SetSliderValue(xboxSlider, (byte)(pressed ? 0xFF : 0x00));
             return;
         }
 
@@ -81,7 +80,7 @@ public partial class VirtualGamepadController : Window
         };
         if (xboxAxis != null)
         {
-            GamepadController.SetAxisValue(xboxAxis, pressed ? xboxAxisValue : (short)0);
+            VirtualGamepad.Controller.SetAxisValue(xboxAxis, pressed ? xboxAxisValue : (short)0);
             return;
         }
     }
@@ -107,7 +106,7 @@ public partial class VirtualGamepadController : Window
 
     private void Stick_PointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        if (GamepadController == null)
+        if (VirtualGamepad.Controller == null)
             return;
 
 
@@ -115,8 +114,8 @@ public partial class VirtualGamepadController : Window
             return;
         
         var (xAxis, yAxis) = TagToAxis(_currentStickFreeStyle);
-        GamepadController.SetAxisValue(xAxis, 0);
-        GamepadController.SetAxisValue(yAxis, 0);
+        VirtualGamepad.Controller.SetAxisValue(xAxis, 0);
+        VirtualGamepad.Controller.SetAxisValue(yAxis, 0);
 
         _currentStickFreeStyle = null;
 
@@ -125,7 +124,7 @@ public partial class VirtualGamepadController : Window
 
     private void Stick_PointerMoved(object? sender, PointerEventArgs e)
     {
-        if (GamepadController == null)
+        if (VirtualGamepad.Controller == null)
             return;
 
         if (!(sender is Control ctrl && ctrl.Tag is string tag))
@@ -144,8 +143,8 @@ public partial class VirtualGamepadController : Window
         short xAxisValue = (short)(xPercent * (short.MaxValue - short.MinValue) - short.MinValue);
         short yAxisValue = (short)((1 - yPercent) * (short.MaxValue - short.MinValue) - short.MinValue);
 
-        GamepadController.SetAxisValue(xAxis, xAxisValue);
-        GamepadController.SetAxisValue(yAxis, yAxisValue);
+        VirtualGamepad.Controller.SetAxisValue(xAxis, xAxisValue);
+        VirtualGamepad.Controller.SetAxisValue(yAxis, yAxisValue);
     }
 
     private static (Xbox360Axis xAxis, Xbox360Axis yAxis) TagToAxis(string tag)

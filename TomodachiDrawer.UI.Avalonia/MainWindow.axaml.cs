@@ -1132,6 +1132,8 @@ public partial class MainWindow : Window
         var imageSnapshot = _currentImage!.Copy();
         var drawSettings = GetDrawImageSettings();
 
+        AppendLog("Starting to draw with the Virtual Gamepad. Keep focus on the window you want to draw on for the duration of the drawing.");
+
         await Task.Run(async () =>
         {
             using var img = imageSnapshot;
@@ -1143,7 +1145,7 @@ public partial class MainWindow : Window
             await drawer.DrawImage(img, drawSettings);
         });
 
-        AppendLog("Done!");
+        AppendLog("Virtual Gamepad is not longer being controller by the drawer.");
     }
 
     private void MenuDebugOpenVirtualGamepadController_Click(object? sender, RoutedEventArgs e)

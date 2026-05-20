@@ -614,15 +614,11 @@ public partial class MainWindow : Window
         }
 
         var imageSnapshot = _currentImage!.Copy();
-        var denoiser = DenoisingComboBox.SelectedItem?.ToString();
-        var tspLimit = (float)(TSPTimeLimitUpDown.Value ?? 0.5m);
+        var drawSettings = GetDrawImageSettings();
 
         BusyExporting = true;
         ExportRP2040Button.IsEnabled = false;
         TimeSpan totalTime = TimeSpan.MaxValue;
-        var settings = GetQuantizerSettings();
-        var enableExperimental = EnableExperimentalMenuItem.IsChecked;
-        var enableHome = EnableHomeCanvas.IsChecked ?? false;
 
         await Task.Run(async () =>
         {
@@ -641,15 +637,6 @@ public partial class MainWindow : Window
             );
             drawer.ConnectAndConfirmController();
             AppendLog("Starting to generate inputs...");
-            var drawSettings = new DrawImageSettings()
-            {
-                QuantizerSettings = settings,
-                DenoiserName = denoiser,
-                TSPTimeLimit = tspLimit,
-                DisableLargeBrush = false,
-                EnableExperimentalFeatures = enableExperimental,
-                HomeToTopLeft = enableHome,
-            };
             await drawer.DrawImage(img, drawSettings);
             AppendLog($"True complete overall time is: {timingSink.TotalTime.TotalSeconds}s");
 
@@ -678,6 +665,25 @@ public partial class MainWindow : Window
         ExportRP2040Button.IsEnabled = true;
 
         SetEstimate(totalTime);
+    }
+
+    private DrawImageSettings GetDrawImageSettings()
+    {
+        var denoiser = DenoisingComboBox.SelectedItem?.ToString();
+        var tspLimit = (float)(TSPTimeLimitUpDown.Value ?? 0.5m);
+        var quantizerSettings = GetQuantizerSettings();
+        var enableExperimental = EnableExperimentalMenuItem.IsChecked;
+        var enableHome = EnableHomeCanvas.IsChecked ?? false;
+
+        return new()
+        {
+            QuantizerSettings = quantizerSettings,
+            DenoiserName = denoiser,
+            TSPTimeLimit = tspLimit,
+            DisableLargeBrush = false,
+            EnableExperimentalFeatures = enableExperimental,
+            HomeToTopLeft = enableHome,
+        };
     }
 
     private void SetEstimate(TimeSpan time)
@@ -720,15 +726,11 @@ public partial class MainWindow : Window
             return;
 
         var imageSnapshot = _currentImage!.Copy();
-        var denoiser = DenoisingComboBox.SelectedItem?.ToString();
-        var tspLimit = (float)(TSPTimeLimitUpDown.Value ?? 0.5m);
+        var drawSettings = GetDrawImageSettings();
 
         ExportUF2Button.IsEnabled = false;
         BusyExporting = true;
         TimeSpan totalTime = TimeSpan.MaxValue;
-        var settings = GetQuantizerSettings();
-        var enableExperimental = EnableExperimentalMenuItem.IsChecked;
-        var enableHome = EnableHomeCanvas.IsChecked ?? false;
 
         await Task.Run(async () =>
         {
@@ -747,15 +749,6 @@ public partial class MainWindow : Window
             );
             drawer.ConnectAndConfirmController();
             AppendLog("Starting to generate inputs...");
-            var drawSettings = new DrawImageSettings()
-            {
-                QuantizerSettings = settings,
-                DenoiserName = denoiser,
-                TSPTimeLimit = tspLimit,
-                DisableLargeBrush = false,
-                EnableExperimentalFeatures = enableExperimental,
-                HomeToTopLeft = enableHome,
-            };
             await drawer.DrawImage(img, drawSettings);
             AppendLog($"True complete overall time is: {timingSink.TotalTime.TotalSeconds}s");
 
@@ -1136,15 +1129,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (_virtualGamepadController == null || !_isVirtualGamepadControllerConnected)
-            return;
-
         var imageSnapshot = _currentImage!.Copy();
-        var denoiser = DenoisingComboBox.SelectedItem?.ToString();
-        var tspLimit = (float)(TSPTimeLimitUpDown.Value ?? 0.5m);
-        var settings = GetQuantizerSettings();
-        var enableExperimental = EnableExperimentalMenuItem.IsChecked;
-        var enableHome = EnableHomeCanvas.IsChecked ?? false;
+        var drawSettings = GetDrawImageSettings();
 
         await Task.Run(async () =>
         {
@@ -1154,15 +1140,6 @@ public partial class MainWindow : Window
                 _currentSettings.SelectedSwitchVersion,
                 AppendLog
             );
-            var drawSettings = new DrawImageSettings()
-            {
-                QuantizerSettings = settings,
-                DenoiserName = denoiser,
-                TSPTimeLimit = tspLimit,
-                DisableLargeBrush = false,
-                EnableExperimentalFeatures = enableExperimental,
-                HomeToTopLeft = enableHome,
-            };
             await drawer.DrawImage(img, drawSettings);
         });
 

@@ -1174,7 +1174,7 @@ public partial class MainWindow : Window
         if (!_debugVirtualGamepad.IsConnected)
             return;
 
-        var window = new VirtualGamepadController
+        var window = new VirtualGamepadControllerWindow
         {
             VirtualGamepad = _debugVirtualGamepad
         };

@@ -6,12 +6,12 @@ using Key = Avalonia.Input.Key;
 
 namespace TomodachiDrawer.UI.Avalonia;
 
-public partial class VirtualGamepadController : Window
+public partial class VirtualGamepadControllerWindow : Window
 {
     public required VirtualGamepad VirtualGamepad;
     private string? _currentStickFreeStyle = null;
 
-    public VirtualGamepadController()
+    public VirtualGamepadControllerWindow()
     {
         InitializeComponent();
     }

@@ -19,6 +19,6 @@
 	<key>CFBundleShortVersionString</key>
 	<string>{{version}}</string>
     <key>NSRemovableVolumesUsageDescription</key>
-    <string>This app needs access to removable volumes to flash the firmware to your RP2040 microcontroller.</string>
+    <string>This app needs access to removable volumes to flash the firmware or image data directly to your microcontroller.</string>
 </dict>
 </plist>

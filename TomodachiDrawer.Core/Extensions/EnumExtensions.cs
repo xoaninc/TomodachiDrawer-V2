@@ -14,15 +14,16 @@ namespace TomodachiDrawer.Core.Extensions
         public static string GetDescription(this Enum value)
         {
             var type = value.GetType();
-            var map = _descriptionCache.GetOrAdd(type, BuildDescriptionMap);
+            if (!_descriptionCache.TryGetValue(type, out var map))
+            {
+                map = BuildDescriptionMap(type);
+                _descriptionCache.TryAdd(type, map);
+            }
 
             var key = value.ToString();
-            if (map.TryGetValue(key, out var descVal))
-                return descVal;
-            return key;
+            return map.TryGetValue(key, out var descVal) ? descVal : key;
         }
 
-        [return: DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicFields)]
         private static Dictionary<string, string> BuildDescriptionMap(
             [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicFields)] Type t)
         {

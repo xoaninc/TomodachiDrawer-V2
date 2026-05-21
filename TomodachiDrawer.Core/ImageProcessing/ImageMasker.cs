@@ -12,7 +12,8 @@ namespace TomodachiDrawer.Core.ImageProcessing
             var resourceNames = assembly.GetManifestResourceNames();
             if (resourceNames.Contains(targetResourceName))
             {
-                return SKBitmap.Decode(assembly.GetManifestResourceStream(targetResourceName));
+                using var stream = assembly.GetManifestResourceStream(targetResourceName);
+                return SKBitmap.Decode(stream);
             }
             else
             {

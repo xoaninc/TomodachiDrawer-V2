@@ -138,7 +138,7 @@ public partial class MainWindow : Window
         await ShowMessageAsync(
             "Welcome to TomodachiDrawer",
             "0.5.0 adds a tool for helping you with more complex, non square templates." +
-            "\nAt the top menu bar, select \"Templates\" and choose the item type you want, it will open a editor with a preview of the layout, and copy it to your clipboard for you to easily edit in other image editing software."
+            "\nAt the top menu bar, select \"Templates\" and choose the item type you want, it will open an editor with a preview of the layout, and copy it to your clipboard for you to easily edit in other image editing software."
         );
     }
 
@@ -351,7 +351,6 @@ public partial class MainWindow : Window
                 new SKImageInfo(newWidth, newHeight),
                 new SKSamplingOptions(SKCubicResampler.CatmullRom)
             );
-            img.Dispose();
             img = resized;
             AppendLog($"Image resized to {newWidth}x{newHeight}");
         }

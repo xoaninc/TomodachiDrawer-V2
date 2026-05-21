@@ -39,12 +39,14 @@ public partial class TemplateTool : Window
         }
         else
         {
-            var avaMask = MainWindow.ToAvaloniaBitmap(skiaMask);
             _currentPreview = skiaMask;
 
-            var checker = GenerateCheckerboard(skiaMask.Width, skiaMask.Height, cellSize: 8);
+            var checker = GenerateCheckerboard(256, 256, cellSize: 8);
             CheckerboardPreview.Source = MainWindow.ToAvaloniaBitmap(checker);
-            TemplatePreview.Source = MainWindow.ToAvaloniaBitmap(MakeBetterMask(skiaMask));
+            checker.Dispose();
+            var betterMask = MakeBetterMask(skiaMask);
+            TemplatePreview.Source = MainWindow.ToAvaloniaBitmap(betterMask);
+            betterMask.Dispose();
 
             Opened += TemplateTool_Opened;
         }
@@ -122,7 +124,7 @@ public partial class TemplateTool : Window
 
     private static SKBitmap GenerateCheckerboard(int width, int height, int cellSize = 8)
     {
-        var bmp = new SKBitmap(width, height);
+        var bmp = new SKBitmap(256, 256);
         var colA = new SKColor(42, 42, 42, 255);
         var colB = new SKColor(56, 56, 56, 255);
         for (int y = 0; y < height; y++)
@@ -141,9 +143,9 @@ public partial class TemplateTool : Window
         using var nodrawStream = AssetLoader.Open(new Uri("avares://TomodachiDrawer.UI.Avalonia/Assets/nodraw.png"));
         using var nodraw = SKBitmap.Decode(nodrawStream);
         var tinted = mask.Copy();
-        for (int y = 0; y < tinted.Height; y++)
+        for (int y = 0; y < 256; y++)
         {
-            for (int x = 0; x < tinted.Width; x++)
+            for (int x = 0; x < 256; x++)
             {
                 var px = tinted.GetPixel(x, y);
                 if (px.Alpha > 0)
@@ -185,7 +187,7 @@ public partial class TemplateTool : Window
                 bitmap.Dispose();
                 if (skiaBitmap.Width != 256 || skiaBitmap.Height != 256)
                 {
-                    await ShowMessageAsync($"Error", "The image you had your clipboard was not 256x256. You can copy the template again with the Copy Template To Clipboard button.");
+                    await ShowMessageAsync($"Error", "The image you had on your clipboard was not 256x256. You can copy the template again with the Copy Template To Clipboard button.");
                 }
                 else
                 {
@@ -194,6 +196,7 @@ public partial class TemplateTool : Window
                     _currentPreview.Dispose();
                     _currentPreview = masked;
                     TemplatePreview.Source = MainWindow.ToAvaloniaBitmap(masked);
+                    ConfirmButton.IsEnabled = true;
                 }
             }
             else

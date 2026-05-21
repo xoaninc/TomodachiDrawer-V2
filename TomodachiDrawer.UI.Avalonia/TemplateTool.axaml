@@ -51,7 +51,7 @@
 					<Button x:Name="PasteButton" Content="Paste drawing from clipboard." HorizontalAlignment="Stretch" Click="PasteButton_Click" />
 					<Separator />
 					<Grid ColumnDefinitions="*,6,*">
-						<Button x:Name="ConfirmButton" Grid.Column="0" Content="Confirm" HorizontalAlignment="Stretch" Click="ConfirmButton_Click" />
+						<Button x:Name="ConfirmButton" Grid.Column="0" Content="Confirm" HorizontalAlignment="Stretch" Click="ConfirmButton_Click" IsEnabled="False"/>
 						<Button x:Name="ExitButton" Grid.Column="2" Content="Exit" HorizontalAlignment="Stretch" Click="ExitButton_Click" />
 					</Grid>
 				</StackPanel>

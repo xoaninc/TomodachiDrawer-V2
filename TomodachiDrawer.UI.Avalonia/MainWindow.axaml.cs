@@ -104,7 +104,7 @@ public partial class MainWindow : Window
         {
             if (templateOutput.Success && templateOutput.Result != null)
             {
-                LoadImageFromBitmap(templateOutput.Result, $"template_{mask.ToString()}.png");
+                LoadImageFromBitmap(templateOutput.Result, $"template_{mask}.png");
                 AppendLog($"Loaded masked image for template {mask.GetDescription()} from editor.");
             }
             else if (templateOutput.CouldNotLoad)

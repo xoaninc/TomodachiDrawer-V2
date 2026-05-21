@@ -102,9 +102,9 @@ namespace TomodachiDrawer.Core.ImageProcessing
             TomodachiLifeMask.GoodsTV            => "GoodsDVD00_Uia.png",
             TomodachiLifeMask.GoodsBook          => "GoodsBook00_Uia.png",
             // Headwear
-            TomodachiLifeMask.HeadwearCap        => "HeadwearUgcCap_Uia.png",
-            TomodachiLifeMask.HeadwearCostume    => "HeadwearUgcCostume_Uia.png",
-            TomodachiLifeMask.HeadwearHat        => "HeadwearUgcHat_Uia.png",
+            TomodachiLifeMask.HeadwearCap        => "headwearUgcCap_Uia.png",
+            TomodachiLifeMask.HeadwearCostume    => "headwearUgcCostume_Uia.png",
+            TomodachiLifeMask.HeadwearHat        => "headwearUgcHat_Uia.png",
             // Interior
             TomodachiLifeMask.InteriorRoom       => "InteriorRoom00_Uia.png",
             // Object

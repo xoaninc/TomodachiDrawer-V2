@@ -107,7 +107,7 @@ public partial class MainWindow : Window
                 LoadImageFromBitmap(templateOutput.Result, $"template_{mask.ToString()}.png");
                 AppendLog($"Loaded masked image for template {mask.GetDescription()} from editor.");
             }
-            else if (templateOutput.couldntLoad)
+            else if (templateOutput.CouldNotLoad)
             {
                 AppendLog($"Template editor failed to load the template for {mask.GetDescription()}");
                 _ = ShowMessageAsync("Error loading template", "The template tool could not find the image. This REALLY shouldn't happen... Try reinstalling?");
@@ -278,7 +278,7 @@ public partial class MainWindow : Window
                 var path = UF2Flasher.FindRP2040Drive();
                 await Dispatcher.UIThread.InvokeAsync(() =>
                 {
-                    bool hasImage = !string.IsNullOrEmpty(_currentImagePath);
+                    bool hasImage = _currentImage != null;
 
                     // ExportUF2 only needs an image — no RP2040 required
                     ExportUF2Button.IsEnabled = hasImage;

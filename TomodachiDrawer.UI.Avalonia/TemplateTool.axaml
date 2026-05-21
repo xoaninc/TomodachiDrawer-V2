@@ -29,7 +29,7 @@
 		<Grid Grid.Column="0">
 			<Grid.RowDefinitions>
 				<RowDefinition Height="Auto" />
-				<RowDefinition Height="*" />
+				<RowDefinition Height="Auto" />
 			</Grid.RowDefinitions>
 			<Border Grid.Row="0" Classes="group" Margin="0,0,0,6">
 				<StackPanel Spacing="6">
@@ -39,7 +39,7 @@
 					<StackPanel Spacing="4" Margin="8,0,0,0">
 						<TextBlock TextWrapping="Wrap" Text="1. Paste the image on your clipboard in an image editor of your choice." />
 						<TextBlock TextWrapping="Wrap" Text="2. Add whatever content you want to the image. Anything in the opaque area of the template will not be drawn!" />
-						<TextBlock TextWrapping="Wrap" Text="3. Once done, click Paste drawing from clipboard (after copying the final version in your editor), or Open Image" />
+						<TextBlock TextWrapping="Wrap" Text="3. Once done, click Paste drawing from clipboard (after copying the final version in your editor)" />
 						<TextBlock TextWrapping="Wrap" Text="4. Press Confirm to return to the main view with this image as the input. This tool will remove all pixels in the undrawable area." />
 					</StackPanel>
 				</StackPanel>

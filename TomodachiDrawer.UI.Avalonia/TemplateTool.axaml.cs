@@ -3,7 +3,6 @@ using Avalonia.Controls;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
-using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
@@ -18,7 +17,6 @@ namespace TomodachiDrawer.UI.Avalonia;
 public partial class TemplateTool : Window
 {
     private readonly TomodachiLifeMask _mask;
-
 
     private SKBitmap _currentPreview = new SKBitmap(256, 256); // this is just to shut up a warning :<
 
@@ -53,7 +51,7 @@ public partial class TemplateTool : Window
 
     }
 
-    private async void SetClipboardBitmap(Bitmap bitmap)
+    private async Task SetClipboardBitmap(Bitmap bitmap)
     {
         var topLevel = TopLevel.GetTopLevel(this);
         if (topLevel?.Clipboard is { } clipboard)
@@ -113,20 +111,20 @@ public partial class TemplateTool : Window
     private async void TemplateTool_Opened(object? sender, EventArgs e)
     {
         if (TemplatePreview.Source is Bitmap bitmap)
-            SetClipboardBitmap(bitmap);
+            await SetClipboardBitmap(bitmap);
     }
 
     private async void CopyClipboardButton_Click(object? sender, RoutedEventArgs e)
     {
         if (TemplatePreview.Source is Bitmap bitmap)
-            SetClipboardBitmap(bitmap);
+            await SetClipboardBitmap(bitmap);
     }
 
     private static SKBitmap GenerateCheckerboard(int width, int height, int cellSize = 8)
     {
         var bmp = new SKBitmap(width, height);
-        var colA = new SKColor(0x2A, 0x2A, 0x2A, 0xFF);
-        var colB = new SKColor(0x38, 0x38, 0x38, 0xFF);
+        var colA = new SKColor(42, 42, 42, 255);
+        var colB = new SKColor(56, 56, 56, 255);
         for (int y = 0; y < height; y++)
         {
             for (int x = 0; x < width; x++)
@@ -141,7 +139,7 @@ public partial class TemplateTool : Window
     private static SKBitmap MakeBetterMask(SKBitmap mask)
     {
         using var nodrawStream = AssetLoader.Open(new Uri("avares://TomodachiDrawer.UI.Avalonia/Assets/nodraw.png"));
-        var nodraw = SKBitmap.Decode(nodrawStream);
+        using var nodraw = SKBitmap.Decode(nodrawStream);
         var tinted = mask.Copy();
         for (int y = 0; y < tinted.Height; y++)
         {
@@ -167,14 +165,12 @@ public partial class TemplateTool : Window
 
     private async void PasteButton_Click(object? sender, RoutedEventArgs e)
     {
-        // Read the image from the clipboard, convert it to SKBitmap, apply the mask, and update preview.
         var topLevel = TopLevel.GetTopLevel(this);
         if (topLevel?.Clipboard is { } clipboard)
         {
             var bitmap = await clipboard.TryGetBitmapAsync();
-            if (bitmap == null) // fallback to try and read a file off disk...
+            if (bitmap == null) // fallback to try and read a file off disk... If they have a path to a file on clipboard instead.
             {
-                // try and fetch a file path instead...
                 var path = await clipboard.TryGetFilesAsync();
                 if (path?.Length > 0 && File.Exists(path[0].Path.LocalPath))
                 {
@@ -186,13 +182,14 @@ public partial class TemplateTool : Window
             {
                 // Convert to SKBitmap and mask it off
                 var skiaBitmap = ToSKBitmap(bitmap);
+                bitmap.Dispose();
                 if (skiaBitmap.Width != 256 || skiaBitmap.Height != 256)
                 {
                     await ShowMessageAsync($"Error", "The image you had your clipboard was not 256x256. You can copy the template again with the Copy Template To Clipboard button.");
                 }
                 else
                 {
-                    var masked = ImageMasker.MaskImage(skiaBitmap, ImageMasker.GetMask(_mask));
+                    var masked = ImageMasker.MaskImage(skiaBitmap, ImageMasker.GetMask(_mask)!);
                     // update preview image — composite the masked result with the red mask overlay
                     _currentPreview.Dispose();
                     _currentPreview = masked;
@@ -211,9 +208,9 @@ public partial class TemplateTool : Window
 
     private void ConfirmButton_Click(object? sender, RoutedEventArgs e)
     {
-        var trimmedImage = _currentPreview;
-
-        this.Close(new TemplateToolResponse(true, false, trimmedImage)); // Replace DEFAULT with the right thing
+        var trimmedImage = _currentPreview.Copy();
+        _currentPreview.Dispose();
+        this.Close(new TemplateToolResponse(true, false, trimmedImage));
     }
 
     private void ExitButton_Click(object? sender, RoutedEventArgs e)

@@ -5,7 +5,7 @@ namespace TomodachiDrawer.Core.ImageProcessing
     public static class ImageMasker
     {
         private const string ResourcePath = "TomodachiDrawer.Core.Assets.Masks.";
-        public static SKBitmap GetMask(TomodachiLifeMask mask)
+        public static SKBitmap? GetMask(TomodachiLifeMask mask)
         {
             var targetResourceName = ResourcePath + mask.GetFileName();
             var assembly = typeof(CanvasDrawer).Assembly;
@@ -16,7 +16,7 @@ namespace TomodachiDrawer.Core.ImageProcessing
             }
             else
             {
-                throw new FileNotFoundException($"Could not find {targetResourceName}");
+                return null;
             }
         }
 
@@ -26,7 +26,7 @@ namespace TomodachiDrawer.Core.ImageProcessing
                 throw new ArgumentException("Input and mask must be the same size.");
 
             // The tomodachi life masks are WHITE for excluded areas, and BLACK&TRANSPARENT for included areas.
-            // So we remomve anything fromm the input thats in the white areas of the mask.
+            // So we remove anything from the input thats in the white areas of the mask.
             // For simplicities sake, just using .Alpha as the mask.
 
             var output = new SKBitmap(input.Width, input.Height);

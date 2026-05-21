@@ -16,6 +16,7 @@ using Avalonia.Threading;
 using SkiaSharp;
 
 using TomodachiDrawer.Core;
+using TomodachiDrawer.Core.Extensions;
 using TomodachiDrawer.Core.ImageProcessing;
 using TomodachiDrawer.Core.ImageProcessing.Denoising;
 using TomodachiDrawer.Core.ImageProcessing.Quantizers;
@@ -55,6 +56,8 @@ public partial class MainWindow : Window
         DenoisingComboBox.SelectedIndex = 0;
         DenoisingComboBox.SelectionChanged += (_, _) => UpdatePreview();
 
+        InitializeTemplates();
+
         GetSettings();
 
         DragDrop.SetAllowDrop(this, true);
@@ -75,6 +78,57 @@ public partial class MainWindow : Window
         if (_currentSettings.FirstStartId != CURRENT_WELCOME_ID)
         {
             Opened += MainWindow_Opened;
+        }
+    }
+
+    private void InitializeTemplates()
+    {
+        foreach (var mask in Enum.GetValues<TomodachiLifeMask>().Cast<TomodachiLifeMask>())
+        {
+            var desc = mask.GetDescription();
+            var menuItem = new MenuItem()
+            {
+                Header = desc
+            };
+            menuItem.Click += (s, e) => OpenTemplate(mask);
+            MenuTemplates.Items.Add(menuItem);
+        }
+    }
+
+    private async void OpenTemplate(TomodachiLifeMask mask)
+    {
+        var templateWindow = new TemplateTool(mask);
+        var templateOutput = await templateWindow.ShowDialog<TemplateToolResponse?>(this);
+        if (templateOutput != null)
+        {
+            if (templateOutput.Success && templateOutput.Result != null)
+            {
+                // Update the preview to use the masked template.
+                var tempPath = Path.Combine(
+                    Path.GetTempPath(),
+                    $"tomodachi_template_{mask.ToString()}_{Random.Shared.Next(1000000, 9999999)}.png"
+                );
+                using var data = SKImage.FromBitmap(templateOutput.Result).Encode(SKEncodedImageFormat.Png, 100);
+                using var stream = File.OpenWrite(tempPath);
+                data.SaveTo(stream);
+                stream.Dispose();
+                data.Dispose();
+                LoadImage(tempPath);
+                AppendLog($"Loaded masked image for template {mask.GetDescription()} from editor.");
+            }
+            else if (templateOutput.couldntLoad)
+            {
+                AppendLog($"Template editor failed to load the template for {mask.GetDescription()}");
+                _ = ShowMessageAsync("Error loading template", "The template tool could not find the image. This REALLY shouldn't happen... Try reinstalling?");
+            }
+            else
+            {
+                AppendLog($"Template editor closed with no input. Nothing changed.");
+            }
+        }
+        else
+        {
+            AppendLog($"The template editor closed unexpectedly...");
         }
     }
 
@@ -370,7 +424,7 @@ public partial class MainWindow : Window
         );
     }
 
-    private static Bitmap? ToAvaloniaBitmap(SKBitmap skBitmap)
+    public static Bitmap ToAvaloniaBitmap(SKBitmap skBitmap)
     {
         using var image = SKImage.FromBitmap(skBitmap);
         using var data = image.Encode(SKEncodedImageFormat.Png, 100);

@@ -1,18 +1,23 @@
 ﻿using SkiaSharp;
 
-using System;
-using System.Collections.Generic;
-using System.Text;
-
 namespace TomodachiDrawer.Core.ImageProcessing
 {
     public static class ImageMasker
     {
-
-        public static void GetMask(string name)
+        private const string ResourcePath = "TomodachiDrawer.Core.Assets.Masks.";
+        public static SKBitmap GetMask(TomodachiLifeMask mask)
         {
-            var assembly = typeof(CanvasDrawer).Assembly.GetManifestResourceNames();
-            Console.WriteLine(assembly[1]);
+            var targetResourceName = ResourcePath + mask.GetFileName();
+            var assembly = typeof(CanvasDrawer).Assembly;
+            var resourceNames = assembly.GetManifestResourceNames();
+            if (resourceNames.Contains(targetResourceName))
+            {
+                return SKBitmap.Decode(assembly.GetManifestResourceStream(targetResourceName));
+            }
+            else
+            {
+                throw new FileNotFoundException($"Could not find {targetResourceName}");
+            }
         }
 
         public static SKBitmap MaskImage(SKBitmap input, SKBitmap mask)

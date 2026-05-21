@@ -32,6 +32,7 @@ public partial class MainWindow : Window
     private const string firmwareFileName = "TomodachiDrawer.Firmware.uf2";
 
     private string _currentImagePath = string.Empty;
+    private SKBitmap? _currentImage;
     private readonly CancellationTokenSource _cts = new();
 
     private bool BusyExporting = false;
@@ -103,17 +104,7 @@ public partial class MainWindow : Window
         {
             if (templateOutput.Success && templateOutput.Result != null)
             {
-                // Update the preview to use the masked template.
-                var tempPath = Path.Combine(
-                    Path.GetTempPath(),
-                    $"tomodachi_template_{mask.ToString()}_{Random.Shared.Next(1000000, 9999999)}.png"
-                );
-                using var data = SKImage.FromBitmap(templateOutput.Result).Encode(SKEncodedImageFormat.Png, 100);
-                using var stream = File.OpenWrite(tempPath);
-                data.SaveTo(stream);
-                stream.Dispose();
-                data.Dispose();
-                LoadImage(tempPath);
+                LoadImageFromBitmap(templateOutput.Result, $"template_{mask.ToString()}.png");
                 AppendLog($"Loaded masked image for template {mask.GetDescription()} from editor.");
             }
             else if (templateOutput.couldntLoad)
@@ -364,21 +355,23 @@ public partial class MainWindow : Window
             );
             img.Dispose();
             img = resized;
-
-            string tempPath = Path.Combine(
-                Path.GetTempPath(),
-                $"tomodachi_{Path.GetFileName(path)}"
-            );
-            using var data = SKImage.FromBitmap(img).Encode(SKEncodedImageFormat.Png, 100);
-            using var stream = File.OpenWrite(tempPath);
-            data.SaveTo(stream);
-
-            path = tempPath;
-            AppendLog($"Image resized to {newWidth}x{newHeight}, saved to temp: {tempPath}");
+            AppendLog($"Image resized to {newWidth}x{newHeight}");
         }
 
-        _currentImagePath = path;
-        ImagePathBox.Text = path;
+        LoadImageFromBitmap(img, Path.GetFileName(path));
+    }
+
+    /// <summary>
+    /// Stores <paramref name="img"/> as the active image and refreshes all dependent UI.
+    /// Takes ownership of <paramref name="img"/> — do not dispose it after calling this.
+    /// </summary>
+    private void LoadImageFromBitmap(SKBitmap img, string displayName)
+    {
+        _currentImage?.Dispose();
+        _currentImage = img;
+        _currentImagePath = displayName; // kept for log messages / ImagePathBox
+
+        ImagePathBox.Text = displayName;
         ExportUF2Button.IsEnabled = true;
 
         if (img.Width == 256 && img.Height == 256)
@@ -390,28 +383,25 @@ public partial class MainWindow : Window
         UpdatePreview();
         TSPTimeLimitUpDown.Value = (decimal)
             CanvasDrawer.GetRecommendedTSPSolveTime(img.Width, img.Height);
-        AppendLog($"Loaded image: {Path.GetFileName(path)} ({img.Width}x{img.Height})");
-        img.Dispose();
+        AppendLog($"Loaded image: {displayName} ({img.Width}x{img.Height})");
     }
 
     private SKBitmap GetPreview()
     {
+        if (_currentImage == null)
+            throw new InvalidOperationException("No image loaded.");
+
         var pal = new ColourPalette(new DummySink());
         var denoiser = DenoisingComboBox.SelectedItem?.ToString();
         var quantizerSettings = GetQuantizerSettings();
-        var preview = pal.PreviewColourMapping(
-            SKBitmap.Decode(_currentImagePath),
-            quantizerSettings,
-            denoiser
-        );
-        return preview;
+        return pal.PreviewColourMapping(_currentImage, quantizerSettings, denoiser);
     }
 
     private void UpdatePreview()
     {
-        if (!File.Exists(_currentImagePath))
+        if (_currentImage == null)
         {
-            AppendLog($"File does not exist, cannot update preview: {_currentImagePath}");
+            AppendLog($"No image loaded, cannot update preview.");
             return;
         }
 
@@ -420,7 +410,7 @@ public partial class MainWindow : Window
 
         PreviewImage.Source = ToAvaloniaBitmap(preview);
         AppendLog(
-            $"Updated preview for {Path.GetFileName(_currentImagePath)} using {quantizerSettings.quantizerName}"
+            $"Updated preview for {_currentImagePath} using {quantizerSettings.quantizerName}"
         );
     }
 
@@ -534,7 +524,7 @@ public partial class MainWindow : Window
 
     private void ColourMatcherComboBox_SelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
-        if (!string.IsNullOrEmpty(_currentImagePath))
+        if (_currentImage != null)
             UpdatePreview();
         ColourLimitUpDown.IsEnabled =
             ColourMatcherComboBox?.SelectedValue?.ToString() == "Arbitrary";
@@ -567,7 +557,7 @@ public partial class MainWindow : Window
 
     private async void ExportRP2040Button_Click(object? sender, RoutedEventArgs e)
     {
-        if (string.IsNullOrEmpty(_currentImagePath))
+        if (_currentImage == null)
             return;
 
         if (_currentSettings.SelectedSwitchVersion == SwitchVersion.None)
@@ -581,7 +571,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var imagePath = _currentImagePath;
+        var imageSnapshot = _currentImage!.Copy();
         var denoiser = DenoisingComboBox.SelectedItem?.ToString();
         var tspLimit = (float)(TSPTimeLimitUpDown.Value ?? 0.5m);
 
@@ -594,6 +584,7 @@ public partial class MainWindow : Window
 
         await Task.Run(async () =>
         {
+            using var img = imageSnapshot;
             string tempPath = Path.Combine(
                 Path.GetTempPath(),
                 $"rp2040output{System.Random.Shared.Next(1000000, 9999999)}.tdld"
@@ -617,7 +608,7 @@ public partial class MainWindow : Window
                 EnableExperimentalFeatures = enableExperimental,
                 HomeToTopLeft = enableHome,
             };
-            await drawer.DrawImage(SKBitmap.Decode(imagePath), drawSettings);
+            await drawer.DrawImage(img, drawSettings);
             AppendLog($"True complete overall time is: {timingSink.TotalTime.TotalSeconds}s");
 
             var fileSink = new FileControllerSink(tempPath);
@@ -655,7 +646,7 @@ public partial class MainWindow : Window
 
     private async void ExportUF2Button_Click(object sender, RoutedEventArgs e)
     {
-        if (string.IsNullOrEmpty(_currentImagePath))
+        if (_currentImage == null)
             return;
 
         if (_currentSettings.SelectedSwitchVersion == SwitchVersion.None)
@@ -686,7 +677,7 @@ public partial class MainWindow : Window
         if (outputPath == null)
             return;
 
-        var imagePath = _currentImagePath;
+        var imageSnapshot = _currentImage!.Copy();
         var denoiser = DenoisingComboBox.SelectedItem?.ToString();
         var tspLimit = (float)(TSPTimeLimitUpDown.Value ?? 0.5m);
 
@@ -698,6 +689,7 @@ public partial class MainWindow : Window
 
         await Task.Run(async () =>
         {
+            using var img = imageSnapshot;
             string tempPath = Path.Combine(
                 Path.GetTempPath(),
                 $"rp2040output{System.Random.Shared.Next(1000000, 9999999)}.tdld"
@@ -720,7 +712,7 @@ public partial class MainWindow : Window
                 DisableLargeBrush = false,
                 EnableExperimentalFeatures = enableExperimental,
             };
-            await drawer.DrawImage(SKBitmap.Decode(imagePath), drawSettings);
+            await drawer.DrawImage(img, drawSettings);
             AppendLog($"True complete overall time is: {timingSink.TotalTime.TotalSeconds}s");
 
             var fileSink = new FileControllerSink(tempPath);
@@ -1015,7 +1007,7 @@ public partial class MainWindow : Window
 
     private async void MenuSavePreview_Click(object? sender, RoutedEventArgs e)
     {
-        if (string.IsNullOrEmpty(_currentImagePath))
+        if (_currentImage == null)
             return;
         // very scientific
         var img = GetPreview();

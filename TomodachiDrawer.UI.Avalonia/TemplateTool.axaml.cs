@@ -186,11 +186,18 @@ public partial class TemplateTool : Window
             {
                 // Convert to SKBitmap and mask it off
                 var skiaBitmap = ToSKBitmap(bitmap);
-                var masked = ImageMasker.MaskImage(skiaBitmap, ImageMasker.GetMask(_mask));
-                // update preview image — composite the masked result with the red mask overlay
-                _currentPreview.Dispose();
-                _currentPreview = masked;
-                TemplatePreview.Source = MainWindow.ToAvaloniaBitmap(masked);
+                if (skiaBitmap.Width != 256 || skiaBitmap.Height != 256)
+                {
+                    await ShowMessageAsync($"Error", "The image you had your clipboard was not 256x256. You can copy the template again with the Copy Template To Clipboard button.")
+                }
+                else
+                {
+                    var masked = ImageMasker.MaskImage(skiaBitmap, ImageMasker.GetMask(_mask));
+                    // update preview image — composite the masked result with the red mask overlay
+                    _currentPreview.Dispose();
+                    _currentPreview = masked;
+                    TemplatePreview.Source = MainWindow.ToAvaloniaBitmap(masked);
+                }
             }
             else
             {

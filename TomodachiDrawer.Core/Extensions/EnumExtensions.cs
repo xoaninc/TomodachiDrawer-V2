@@ -1,5 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 
 namespace TomodachiDrawer.Core.Extensions
@@ -13,23 +14,27 @@ namespace TomodachiDrawer.Core.Extensions
         public static string GetDescription(this Enum value)
         {
             var type = value.GetType();
-            var map = _descriptionCache.GetOrAdd(type, t =>
-            {
-                var dict = new Dictionary<string, string>();
-                foreach (var field in t.GetFields(BindingFlags.Public | BindingFlags.Static))
-                {
-                    var name = field.Name;
-                    var attr = field.GetCustomAttribute<DescriptionAttribute>();
-                    var desc = attr?.Description ?? name;
-                    dict[name] = desc;
-                }
-                return dict;
-            });
+            var map = _descriptionCache.GetOrAdd(type, BuildDescriptionMap);
 
             var key = value.ToString();
             if (map.TryGetValue(key, out var descVal))
                 return descVal;
             return key;
+        }
+
+        [return: DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicFields)]
+        private static Dictionary<string, string> BuildDescriptionMap(
+            [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicFields)] Type t)
+        {
+            var dict = new Dictionary<string, string>();
+            foreach (var field in t.GetFields(BindingFlags.Public | BindingFlags.Static))
+            {
+                var name = field.Name;
+                var attr = field.GetCustomAttribute<DescriptionAttribute>();
+                var desc = attr?.Description ?? name;
+                dict[name] = desc;
+            }
+            return dict;
         }
     }
 

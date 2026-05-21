@@ -132,15 +132,13 @@ public partial class MainWindow : Window
 
     // Welcome message stuff. For important changes, the ID is incremented by one by hand whenever something notable changes.
     // This is only really needed for Mac since its settings are saved in a way that persists more readily.
-    private const int CURRENT_WELCOME_ID = 1;
+    private const int CURRENT_WELCOME_ID = 2;
     private async void ShowWelcomeMessage()
     {
         await ShowMessageAsync(
             "Welcome to TomodachiDrawer",
-            "As of 0.4.7, the Base Firmware has been tweaked to fix a slowdown introduced in 0.3.3. " +
-            "You are encouraged to hit the Flash Base Firmware button again if you flashed prior to this, its harmless if you aren't sure. " +
-            "\nIf this is your first time using TomodachiDrawer, you do not need to worry about this. " +
-            "\n\nHappy (computer assisted) drawing!"
+            "0.5.0 adds a tool for helping you with more complex, non square templates." +
+            "\nAt the top menu bar, select \"Templates\" and choose the item type you want, it will open a editor with a preview of the layout, and copy it to your clipboard for you to easily edit in other image editing software."
         );
     }
 

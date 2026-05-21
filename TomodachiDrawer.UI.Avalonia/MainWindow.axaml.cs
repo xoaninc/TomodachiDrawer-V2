@@ -16,6 +16,7 @@ using Avalonia.Threading;
 using SkiaSharp;
 
 using TomodachiDrawer.Core;
+using TomodachiDrawer.Core.ImageProcessing;
 using TomodachiDrawer.Core.ImageProcessing.Denoising;
 using TomodachiDrawer.Core.ImageProcessing.Quantizers;
 using TomodachiDrawer.Core.Models;
@@ -55,8 +56,6 @@ public partial class MainWindow : Window
         DenoisingComboBox.SelectionChanged += (_, _) => UpdatePreview();
 
         GetSettings();
-
-
 
         DragDrop.SetAllowDrop(this, true);
         AddHandler(DragDrop.DropEvent, OnDrop);

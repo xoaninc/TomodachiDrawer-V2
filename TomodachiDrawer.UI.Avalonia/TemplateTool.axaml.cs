@@ -188,7 +188,7 @@ public partial class TemplateTool : Window
                 var skiaBitmap = ToSKBitmap(bitmap);
                 if (skiaBitmap.Width != 256 || skiaBitmap.Height != 256)
                 {
-                    await ShowMessageAsync($"Error", "The image you had your clipboard was not 256x256. You can copy the template again with the Copy Template To Clipboard button.")
+                    await ShowMessageAsync($"Error", "The image you had your clipboard was not 256x256. You can copy the template again with the Copy Template To Clipboard button.");
                 }
                 else
                 {

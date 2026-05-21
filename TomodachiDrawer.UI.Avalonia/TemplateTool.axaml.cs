@@ -20,7 +20,7 @@ public partial class TemplateTool : Window
     private readonly TomodachiLifeMask _mask;
 
 
-    private SKBitmap _currentPreview;
+    private SKBitmap _currentPreview = new SKBitmap(256, 256); // this is just to shut up a warning :<
 
     // For preview
     public TemplateTool() : this(TomodachiLifeMask.BodyTopsLongH) { }

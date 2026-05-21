@@ -185,6 +185,45 @@ public partial class MainWindow : Window
         base.OnClosed(e);
     }
 
+    // Check if we can access the RP2040 drive.
+    // Also trigger permission prompt on macOS if we haven't been granted permissions yet.
+    // Returns `true` if we can access it.
+    private bool CanAccessRP2040Drive(string drivePath)
+    {
+        try
+        {
+            // Try to access the drive by listing its files.
+            // This also trigger the permission prompt on macOS.
+            _ = Directory.GetFiles(drivePath);
+            return true;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // macOS: User (probably) clicked "Don't Allow".
+            if (OperatingSystem.IsMacOS())
+            {
+                _ = ShowMessageAsync(
+                    "Permission Denied",
+                    $"Permission to access the RPI-RP2 drive ({drivePath}) was denied.\n\n"
+                        + "Please open System Settings -> Privacy & Security -> Files & Folders, find \"TomodachiDrawer\", and make sure \"Removable Volumes\" is enabled.\n\n"
+                        + "This is required for the app to write the firmware directly to your RPI-RP2 drive.\r"
+                        + $"Or you can manually copy the .uf2 file to {drivePath} if you want to avoid granting permissions.",
+                    new Uri("x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders"),
+                    "Open System Settings"
+                );
+            }
+            // Log the error. Just in case, log on other OSes as well.
+            AppendLog($"Permission to access RPI-RP2 drive ({drivePath}) was denied");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            // Also just in case, log any other error that might occur while trying to access the drive.
+            AppendLog($"Could not access the RPI-RP2 drive ({drivePath}): {ex.Message}");
+            return false;
+        }
+    }
+
     // ── RP2040 polling ────────────────────────────────────────────────
 
     private void StartRP2040Polling()
@@ -536,7 +575,7 @@ public partial class MainWindow : Window
             var uf2Bytes = UF2Flasher.BuildTDLDUF2(tdldBytes);
             var drivePath = UF2Flasher.FindRP2040Drive();
 
-            if (uf2Bytes != null && uf2Bytes.Length > 0 && drivePath != null)
+            if (uf2Bytes != null && uf2Bytes.Length > 0 && drivePath != null && CanAccessRP2040Drive(drivePath))
             {
                 File.WriteAllBytes(Path.Combine(drivePath, "tdld_image.uf2"), uf2Bytes);
                 AppendLog(
@@ -693,6 +732,10 @@ public partial class MainWindow : Window
         if (drivePath == null)
         {
             _ = ShowMessageAsync("Error", "RP2040 not detected. Connect it in BOOT mode first.");
+            return;
+        }
+        if (!CanAccessRP2040Drive(drivePath))
+        {
             return;
         }
 

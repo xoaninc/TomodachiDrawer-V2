@@ -9,9 +9,9 @@ namespace TomodachiDrawer.Core.ImageProcessing
         BodyBottomsPantsH,
         [Description("Bottoms: Pants")]
         BodyBottomsPantsL,
-        [Description("Body Bottoms: Skirt Long")]
+        [Description("Bottoms: Skirt Long")]
         BodyBottomsSkirtL,
-        [Description("Body Bottoms: Skirt Short")]
+        [Description("Bottoms: Skirt Short")]
         BodyBottomsSkirtS,
 
         // Body Tops

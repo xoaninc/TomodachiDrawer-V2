@@ -6,6 +6,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
+using Avalonia.Platform.Storage;
 
 using SkiaSharp;
 
@@ -122,6 +123,47 @@ public partial class TemplateTool : Window
         {
             await SetClipboardBitmap(_betterMask);
         }
+    }
+
+    private async void SaveTemplateButton_Click(object? sender, RoutedEventArgs e)
+    {
+        if (_betterMask == null) return;
+        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Save Template",
+            SuggestedFileName = $"{_mask}_template.png",
+            DefaultExtension = "png",
+            FileTypeChoices = [new FilePickerFileType("PNG Image") { Patterns = ["*.png"] }],
+        });
+        var path = file?.TryGetLocalPath();
+        if (path != null)
+            _betterMask.Save(path);
+    }
+
+    private async void OpenDrawingButton_Click(object? sender, RoutedEventArgs e)
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Open Drawing",
+            AllowMultiple = false,
+            FileTypeFilter = [new FilePickerFileType("PNG Image") { Patterns = ["*.png"] }],
+        });
+        if (files.Count == 0) return;
+        var path = files[0].TryGetLocalPath();
+        if (path == null) return;
+
+        using var bitmap = new Bitmap(path);
+        var skiaBitmap = ToSKBitmap(bitmap);
+        if (skiaBitmap.Width != 256 || skiaBitmap.Height != 256)
+        {
+            await ShowMessageAsync("Error", "The image must be 256x256. You can save the template with the Save Template To File button to use as a starting point.");
+            return;
+        }
+        var masked = ImageMasker.MaskImage(skiaBitmap, ImageMasker.GetMask(_mask)!);
+        _currentPreview.Dispose();
+        _currentPreview = masked;
+        TemplatePreview.Source = MainWindow.ToAvaloniaBitmap(masked);
+        ConfirmButton.IsEnabled = true;
     }
 
     private static SKBitmap GenerateCheckerboard(int width, int height, int cellSize = 8)

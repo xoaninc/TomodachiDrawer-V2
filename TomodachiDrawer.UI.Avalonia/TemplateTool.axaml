@@ -5,8 +5,8 @@
 		mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
 		x:Class="TomodachiDrawer.UI.Avalonia.TemplateTool"
 		Title="Template Tool"
-		Width="800" Height="575"
-		MinWidth="800" MinHeight="575"
+		Width="800" Height="625"
+		MinWidth="800" MinHeight="625"
 		>
 	<Window.Styles>
 		<Style Selector="Border.group">
@@ -33,21 +33,30 @@
 			<Border Grid.Row="0" Classes="group" Margin="0,0,0,6">
 				<StackPanel Spacing="6">
 					<TextBlock Classes="header" Text="Information" />
-					<TextBlock TextWrapping="Wrap" Text="You selected a complex template type. The template (shown on the right) has been copied to your clipboard." />
-					<TextBlock TextWrapping="Wrap" FontWeight="SemiBold" Text="Steps:" />
+					<TextBlock TextWrapping="Wrap" Text="You selected a complex template type." />
+					<TextBlock TextWrapping="Wrap" FontWeight="SemiBold" Text="Steps to use:" />
 					<StackPanel Spacing="4" Margin="8,0,0,0">
 						<TextBlock TextWrapping="Wrap" Text="1. Paste the image on your clipboard in an image editor of your choice." />
 						<TextBlock TextWrapping="Wrap" Text="2. Add whatever content you want to the image. Anything in the opaque area of the template will not be drawn!" />
 						<TextBlock TextWrapping="Wrap" Text="3. Once done, click Paste drawing from clipboard (after copying the final version in your editor)" />
 						<TextBlock TextWrapping="Wrap" Text="4. Press Confirm to return to the main view with this image as the input. This tool will remove all pixels in the undrawable area." />
 					</StackPanel>
+					<TextBlock TextWrapping="Wrap" FontWeight="Normal" >
+						<Run Text="Note: If you have a non-100% display scale in Windows, you will need to use the Save and Open buttons due to a bug in Avalonia UI that resizes the template when copied. "/>
+						<LineBreak/>
+						<InlineUIContainer>
+							<HyperlinkButton Content="See GitHub issue." NavigateUri="https://github.com/Lucas7yoshi/TomodachiDrawer/issues/64" Padding="0" BorderThickness="0" FontWeight="Light" />
+						</InlineUIContainer>
+					</TextBlock>
 				</StackPanel>
 			</Border>
 			<Border Grid.Row="1" Classes="group" Margin="0,0,0,6">
 				<StackPanel Spacing="6">
 					<TextBlock Classes="header" Text="Options" />
 					<Button x:Name="CopyClipboardButton" Content="Copy template to clipboard." HorizontalAlignment="Stretch" Click="CopyClipboardButton_Click" />
+					<Button x:Name="SaveTemplateButton" Content="Save template to file..." HorizontalAlignment="Stretch" Click="SaveTemplateButton_Click" ToolTip.Tip="Saves the template as a png to file. Use this if you have display scaling screwing up the image resolution (it should be 256x256) - or if you just prefer this way." />
 					<Button x:Name="PasteButton" Content="Paste drawing from clipboard." HorizontalAlignment="Stretch" Click="PasteButton_Click" />
+					<Button x:Name="OpenDrawingButton" Content="Open drawing from file..." HorizontalAlignment="Stretch" Click="OpenDrawingButton_Click" ToolTip.Tip="Opens the completed template, must be 256x256." />
 					<Separator />
 					<Grid ColumnDefinitions="*,6,*">
 						<Button x:Name="ConfirmButton" Grid.Column="0" Content="Confirm" HorizontalAlignment="Stretch" Click="ConfirmButton_Click" IsEnabled="False"/>

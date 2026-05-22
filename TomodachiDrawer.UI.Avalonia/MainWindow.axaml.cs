@@ -576,7 +576,7 @@ public partial class MainWindow : Window
         ExportRP2040Button.IsEnabled = false;
         TimeSpan totalTime = TimeSpan.MaxValue;
         var settings = GetQuantizerSettings();
-        var enableExperimental = EnableExperimentalCheckBox.IsChecked ?? false;
+        var enableExperimental = EnableExperimentalMenuItem.IsChecked;
         var enableHome = EnableHomeCanvas.IsChecked ?? false;
 
         await Task.Run(async () =>
@@ -682,7 +682,7 @@ public partial class MainWindow : Window
         BusyExporting = true;
         TimeSpan totalTime = TimeSpan.MaxValue;
         var settings = GetQuantizerSettings();
-        var enableExperimental = EnableExperimentalCheckBox.IsChecked ?? false;
+        var enableExperimental = EnableExperimentalMenuItem.IsChecked;
 
         await Task.Run(async () =>
         {
@@ -862,13 +862,13 @@ public partial class MainWindow : Window
         NumericUpDownValueChangedEventArgs e
     ) => UpdatePreview();
 
-    private void AppThemeComboBox_SelectionChanged(object? sender, SelectionChangedEventArgs e)
+    private void ThemeMenuItem_Click(object? sender, RoutedEventArgs e)
     {
-        // Why does avalonia call this before AppThemeComboBox exists?? lol
-        if (AppThemeComboBox == null)
-            return;
-
-        SetTheme(AppThemeComboBox.SelectedIndex);
+        int index = sender == ThemeLightMenuItem ? 1 : sender == ThemeDarkMenuItem ? 2 : 0;
+        ThemeSystemMenuItem.IsChecked = index == 0;
+        ThemeLightMenuItem.IsChecked = index == 1;
+        ThemeDarkMenuItem.IsChecked = index == 2;
+        SetTheme(index);
         SaveSettings();
     }
 
@@ -963,9 +963,11 @@ public partial class MainWindow : Window
         SwitchVersionComboBox.SelectedIndex =
             (int)_currentSettings.SelectedSwitchVersion - 1;
         SetTheme(_currentSettings.SelectedThemeIndex);
-        AppThemeComboBox.SelectedIndex = _currentSettings.SelectedThemeIndex;
+        ThemeSystemMenuItem.IsChecked = _currentSettings.SelectedThemeIndex == 0;
+        ThemeLightMenuItem.IsChecked = _currentSettings.SelectedThemeIndex == 1;
+        ThemeDarkMenuItem.IsChecked = _currentSettings.SelectedThemeIndex == 2;
 
-        EnableExperimentalCheckBox.IsChecked =
+        EnableExperimentalMenuItem.IsChecked =
             _currentSettings.EnableExperimentalFeatures;
         CheckForUpdatesCheckBox.IsChecked = _currentSettings.CheckForUpdatesOnStart;
     }
@@ -979,9 +981,9 @@ public partial class MainWindow : Window
         SaveSettings();
     }
 
-    private void EnableExperimentalCheckBox_IsCheckedChanged(object? sender, RoutedEventArgs e)
+    private void EnableExperimentalMenuItem_Click(object? sender, RoutedEventArgs e)
     {
-        if (EnableExperimentalCheckBox.IsChecked == true)
+        if (EnableExperimentalMenuItem.IsChecked)
         {
             _ = ShowMessageAsync(
                 "Experimental Features",
@@ -992,7 +994,7 @@ public partial class MainWindow : Window
                 "Open Experimental Feature Info"
             );
         }
-        _currentSettings.EnableExperimentalFeatures = EnableExperimentalCheckBox.IsChecked ?? true;
+        _currentSettings.EnableExperimentalFeatures = EnableExperimentalMenuItem.IsChecked;
         SaveSettings();
     }
 

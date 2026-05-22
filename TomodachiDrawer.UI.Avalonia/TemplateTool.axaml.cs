@@ -17,7 +17,7 @@ namespace TomodachiDrawer.UI.Avalonia;
 public partial class TemplateTool : Window
 {
     private readonly TomodachiLifeMask _mask;
-    private Bitmap _betterMask;
+    private readonly Bitmap? _betterMask;
 
     private SKBitmap _currentPreview = new(256, 256); // this is just to shut up a warning :<
 
@@ -124,7 +124,10 @@ public partial class TemplateTool : Window
 
     private async void CopyClipboardButton_Click(object? sender, RoutedEventArgs e)
     {
-        await SetClipboardBitmap(_betterMask);
+        if (_betterMask != null)
+        {
+            await SetClipboardBitmap(_betterMask);
+        }
     }
 
     private static SKBitmap GenerateCheckerboard(int width, int height, int cellSize = 8)

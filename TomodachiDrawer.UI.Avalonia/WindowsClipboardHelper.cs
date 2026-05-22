@@ -23,6 +23,7 @@ internal static class WindowsClipboardHelper
     private const uint GMEM_MOVEABLE = 0x0002;
     private const int PixelsPerMeter96Dpi = 3780; // 96 / 0.0254 ≈ 3780 px/m
 
+#pragma warning disable SYSLIB1054 // Use 'LibraryImportAttribute' instead of 'DllImportAttribute' to generate P/Invoke marshalling code at compile time
     [DllImport("user32.dll")] private static extern bool OpenClipboard(IntPtr hWnd);
     [DllImport("user32.dll")] private static extern bool CloseClipboard();
     [DllImport("user32.dll")] private static extern bool EmptyClipboard();
@@ -32,6 +33,7 @@ internal static class WindowsClipboardHelper
     [DllImport("kernel32.dll")] private static extern IntPtr GlobalLock(IntPtr hMem);
     [DllImport("kernel32.dll")] private static extern bool GlobalUnlock(IntPtr hMem);
     [DllImport("kernel32.dll")] private static extern IntPtr GlobalFree(IntPtr hMem);
+#pragma warning restore SYSLIB1054 // Use 'LibraryImportAttribute' instead of 'DllImportAttribute' to generate P/Invoke marshalling code at compile time
 
     [StructLayout(LayoutKind.Sequential)]
     private struct BITMAPINFOHEADER
@@ -90,7 +92,9 @@ internal static class WindowsClipboardHelper
         }
     }
 
+#pragma warning disable IDE0060 // Remove unused parameter
     private static void WriteDib(int width, int height, int bpp, int stride, byte[] pixelBytes)
+#pragma warning restore IDE0060 // Remove unused parameter
     {
         int headerSize = Marshal.SizeOf<BITMAPINFOHEADER>();
         var header = new BITMAPINFOHEADER

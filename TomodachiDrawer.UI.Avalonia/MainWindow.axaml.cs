@@ -24,7 +24,9 @@ using TomodachiDrawer.Core.ImageProcessing.Denoising;
 using TomodachiDrawer.Core.ImageProcessing.Quantizers;
 using TomodachiDrawer.Core.Models;
 using TomodachiDrawer.Core.OutputSinks;
-
+#if DEBUG
+using TomodachiDrawer.DebugTools;
+#endif
 using Button = Avalonia.Controls.Button; // conflict with the Button enum in SinkEnums
 
 namespace TomodachiDrawer.UI.Avalonia;
@@ -42,6 +44,14 @@ public partial class MainWindow : Window
     //private SwitchVersion _selectedSwitchVersion = SwitchVersion.None;
     //private int _selectedThemeIndex = 0; // 0 is System.
     private AppSettings _currentSettings = new(); // All cases will result in it being non-null but IntelliSense cant see that far.
+
+#if DEBUG
+    private readonly VirtualGamepad _debugVirtualGamepad = new();
+
+    private MenuItem? MenuDebugConnectVirtualGamepad;
+    private MenuItem? MenuDebugRunInVirtualGamepad;
+    private MenuItem? MenuDebugOpenVirtualGamepadController;
+#endif
 
     public MainWindow()
     {
@@ -149,6 +159,10 @@ public partial class MainWindow : Window
             ShowWelcomeMessage();
             _currentSettings.FirstStartId = CURRENT_WELCOME_ID;
         }
+
+#if DEBUG
+        InsertDebugMenuItems();
+#endif
         SaveSettings();
 
         if (!IsVCRuntimeInstalled())
@@ -201,6 +215,41 @@ public partial class MainWindow : Window
         }
         return currentVersion;
     }
+
+#if DEBUG
+    private void InsertDebugMenuItems()
+    {
+        var debugMenuItem = new MenuItem()
+        {
+            Header = "_Debug",
+        };
+        Menu.Items.Add(debugMenuItem);
+
+        MenuDebugConnectVirtualGamepad = new MenuItem()
+        {
+            Header = "_Connect Virtual Gamepad",
+        };
+        MenuDebugConnectVirtualGamepad.Click += MenuDebugConnectVirtualGamepad_Click;
+        debugMenuItem.Items.Add(MenuDebugConnectVirtualGamepad);
+
+        MenuDebugRunInVirtualGamepad = new MenuItem()
+        {
+            Header = "_Run in Virtual Gamepad",
+            IsEnabled = false,
+        };
+        MenuDebugRunInVirtualGamepad.Click += MenuDebugRunInVirtualGamepad_Click;
+        debugMenuItem.Items.Add(MenuDebugRunInVirtualGamepad);
+
+        MenuDebugOpenVirtualGamepadController = new MenuItem()
+        {
+            Header = "_Control Virtual Gamepad",
+            IsEnabled = false,
+        };
+        MenuDebugOpenVirtualGamepadController.Click += MenuDebugOpenVirtualGamepadController_Click;
+        debugMenuItem.Items.Add(MenuDebugOpenVirtualGamepadController);
+
+    }
+#endif
 
     private async Task PerformAsyncUpdateCheck()
     {
@@ -604,15 +653,11 @@ public partial class MainWindow : Window
         }
 
         var imageSnapshot = _currentImage!.Copy();
-        var denoiser = DenoisingComboBox.SelectedItem?.ToString();
-        var tspLimit = (float)(TSPTimeLimitUpDown.Value ?? 0.5m);
+        var drawSettings = GetDrawImageSettings();
 
         BusyExporting = true;
         ExportRP2040Button.IsEnabled = false;
         TimeSpan totalTime = TimeSpan.MaxValue;
-        var settings = GetQuantizerSettings();
-        var enableExperimental = EnableExperimentalMenuItem.IsChecked;
-        var enableHome = EnableHomeCanvas.IsChecked ?? false;
 
         await Task.Run(async () =>
         {
@@ -631,15 +676,6 @@ public partial class MainWindow : Window
             );
             drawer.ConnectAndConfirmController();
             AppendLog("Starting to generate inputs...");
-            var drawSettings = new DrawImageSettings()
-            {
-                QuantizerSettings = settings,
-                DenoiserName = denoiser,
-                TSPTimeLimit = tspLimit,
-                DisableLargeBrush = false,
-                EnableExperimentalFeatures = enableExperimental,
-                HomeToTopLeft = enableHome,
-            };
             await drawer.DrawImage(img, drawSettings);
             AppendLog($"True complete overall time is: {timingSink.TotalTime.TotalSeconds}s");
 
@@ -670,6 +706,25 @@ public partial class MainWindow : Window
         ExportRP2040Button.IsEnabled = true;
 
         SetEstimate(totalTime);
+    }
+
+    private DrawImageSettings GetDrawImageSettings()
+    {
+        var denoiser = DenoisingComboBox.SelectedItem?.ToString();
+        var tspLimit = (float)(TSPTimeLimitUpDown.Value ?? 0.5m);
+        var quantizerSettings = GetQuantizerSettings();
+        var enableExperimental = EnableExperimentalMenuItem.IsChecked;
+        var enableHome = EnableHomeCanvas.IsChecked ?? false;
+
+        return new()
+        {
+            QuantizerSettings = quantizerSettings,
+            DenoiserName = denoiser,
+            TSPTimeLimit = tspLimit,
+            DisableLargeBrush = false,
+            EnableExperimentalFeatures = enableExperimental,
+            HomeToTopLeft = enableHome,
+        };
     }
 
     private void SetEstimate(TimeSpan time)
@@ -712,14 +767,11 @@ public partial class MainWindow : Window
             return;
 
         var imageSnapshot = _currentImage!.Copy();
-        var denoiser = DenoisingComboBox.SelectedItem?.ToString();
-        var tspLimit = (float)(TSPTimeLimitUpDown.Value ?? 0.5m);
+        var drawSettings = GetDrawImageSettings();
 
         ExportUF2Button.IsEnabled = false;
         BusyExporting = true;
         TimeSpan totalTime = TimeSpan.MaxValue;
-        var settings = GetQuantizerSettings();
-        var enableExperimental = EnableExperimentalMenuItem.IsChecked;
 
         await Task.Run(async () =>
         {
@@ -738,14 +790,6 @@ public partial class MainWindow : Window
             );
             drawer.ConnectAndConfirmController();
             AppendLog("Starting to generate inputs...");
-            var drawSettings = new DrawImageSettings()
-            {
-                QuantizerSettings = settings,
-                DenoiserName = denoiser,
-                TSPTimeLimit = tspLimit,
-                DisableLargeBrush = false,
-                EnableExperimentalFeatures = enableExperimental,
-            };
             await drawer.DrawImage(img, drawSettings);
             AppendLog($"True complete overall time is: {timingSink.TotalTime.TotalSeconds}s");
 
@@ -1077,6 +1121,87 @@ public partial class MainWindow : Window
 
     private void MenuToolsOpenColourToHSVStepsTool_Click(object? sender, RoutedEventArgs e) =>
         new ColourToHSVStepsTool().Show(this);
+
+#if DEBUG
+    private void MenuDebugConnectVirtualGamepad_Click(object? sender, RoutedEventArgs e)
+    {
+        if (
+            MenuDebugConnectVirtualGamepad == null
+            || MenuDebugRunInVirtualGamepad == null
+            || MenuDebugOpenVirtualGamepadController == null
+        ) return;
+
+        if (!_debugVirtualGamepad.CheckDriver())
+        {
+            _ = ShowMessageAsync(
+                "ViGEmBus driver not found",
+                "To use this feature, you must install the ViGEmBus driver.",
+                new Uri("https://github.com/nefarius/ViGEmBus/releases"),
+                "Download it here"
+            );
+            return;
+        }
+
+        if (!_debugVirtualGamepad.IsConnected)
+        {
+            _debugVirtualGamepad.Connect();
+            MenuDebugConnectVirtualGamepad.Header = "Disconnect Virtual Gamepad";
+        }
+        else
+        {
+            MenuDebugConnectVirtualGamepad.Header = "Re-connect Virtual Gamepad";
+            _debugVirtualGamepad.Disconnect();
+        }
+
+        MenuDebugRunInVirtualGamepad.IsEnabled = _debugVirtualGamepad.IsConnected;
+        MenuDebugOpenVirtualGamepadController.IsEnabled = _debugVirtualGamepad.IsConnected;
+    }
+
+    private async void MenuDebugRunInVirtualGamepad_Click(object? sender, RoutedEventArgs e)
+    {
+        if (!_debugVirtualGamepad.IsConnected)
+            return;
+
+        if (string.IsNullOrEmpty(_currentImagePath))
+        {
+            _ = ShowMessageAsync(
+                "No image selected",
+                "Select an image first."
+            );
+            return;
+        }
+
+        var imageSnapshot = _currentImage!.Copy();
+        var drawSettings = GetDrawImageSettings();
+
+        AppendLog("Starting to draw with the Virtual Gamepad. Keep focus on the window you want to draw on for the duration of the drawing.");
+
+        await Task.Run(async () =>
+        {
+            using var img = imageSnapshot;
+            var drawer = new CanvasDrawer(
+                new VirtualGamepadSink(_debugVirtualGamepad),
+                _currentSettings.SelectedSwitchVersion,
+                AppendLog
+            );
+            await drawer.DrawImage(img, drawSettings);
+        });
+
+        AppendLog("Virtual Gamepad is not longer being controller by the drawer.");
+    }
+
+    private void MenuDebugOpenVirtualGamepadController_Click(object? sender, RoutedEventArgs e)
+    {
+        if (!_debugVirtualGamepad.IsConnected)
+            return;
+
+        var window = new VirtualGamepadControllerWindow
+        {
+            VirtualGamepad = _debugVirtualGamepad
+        };
+        window.Show(this);
+    }
+#endif
 
     private void MenuHelpOpenGitHub_Click(object? sender, RoutedEventArgs e) =>
         Launcher.LaunchUriAsync(new Uri("https://github.com/Lucas7yoshi/TomodachiDrawer"));

@@ -38,7 +38,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        configuration: [Release]
+        configuration: [Release, Debug]
         runtime: [win-x64, linux-x64, linux-arm64, osx-x64, osx-arm64] # win-arm64 removed since Google.OrTools dont even ship it. How does that not give a build warning??
 
     steps:
@@ -74,6 +74,7 @@ jobs:
       with:
         path: unzipped-artifacts
         merge-multiple: false
+        pattern: '*-Release'
     - name: Zip for Release
       run: |
         mkdir final-packages

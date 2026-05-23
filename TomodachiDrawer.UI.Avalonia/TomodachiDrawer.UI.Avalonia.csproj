@@ -19,7 +19,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\TomodachiDrawer.Core\TomodachiDrawer.Core.csproj" />
-    <ProjectReference Include="..\TomodachiDrawer.DebugTools\TomodachiDrawer.DebugTools.csproj" />
+    <ProjectReference Condition="'$(Configuration)' == 'Debug'" Include="..\TomodachiDrawer.DebugTools\TomodachiDrawer.DebugTools.csproj" />
   </ItemGroup>
   <ItemGroup>
     <!-- publish trimming thing-->

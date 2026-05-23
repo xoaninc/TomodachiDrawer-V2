@@ -238,6 +238,7 @@ public partial class MainWindow : Window
                         "A new update is available on GitHub."
                             + $"\nCurrent Version: {ourVersion}"
                             + $"\nLatest Version: {releaseVersionTag}"
+                            + $"\nVersion title: {responseJsonObject.RootElement.GetProperty("name").GetString() ?? "N/A"}"
                             + $"\n\nDownload at:\nhttps://github.com/Lucas7yoshi/TomodachiDrawer",
                         new Uri("https://github.com/Lucas7yoshi/TomodachiDrawer/releases"),
                         "Open Releases"

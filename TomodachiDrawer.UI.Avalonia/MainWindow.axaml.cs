@@ -1,7 +1,3 @@
-using System.Reflection;
-using System.Text.Json;
-using System.Text.Json.Serialization;
-
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -12,7 +8,14 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Styling;
 using Avalonia.Threading;
+
+using Microsoft.Win32;
+
 using SkiaSharp;
+
+using System.Reflection;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 using TomodachiDrawer.Core;
 using TomodachiDrawer.Core.Extensions;
@@ -83,6 +86,27 @@ public partial class MainWindow : Window
             _ = PerformAsyncUpdateCheck();
 
         Opened += MainWindow_Opened;
+
+
+    }
+
+    private bool IsVCRuntimeInstalled()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return true;
+        }
+
+        string keyPath = @"SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\X64";
+
+        using var key = Registry.LocalMachine.OpenSubKey(keyPath);
+        if (key != null)
+        {
+            var version = key.GetValue("Version")?.ToString();
+            return !string.IsNullOrEmpty(version);
+        }
+
+        return false;
     }
 
     private void InitializeTemplates()
@@ -132,12 +156,24 @@ public partial class MainWindow : Window
         {
             ShowWelcomeMessage();
             _currentSettings.FirstStartId = CURRENT_WELCOME_ID;
-            SaveSettings();
         }
 
 #if DEBUG
         InsertDebugMenuItems();
 #endif
+        SaveSettings();
+
+        if (!IsVCRuntimeInstalled())
+        {
+            await ShowMessageAsync(
+                "WARNING: MISSING LIBRARIES",
+                $"In order for this program to run, you MUST install the VC Redistributable." +
+                $"\n\nClick the open link button to install it. " +
+                $"If you do not install it, this program will probably crash silently.",
+                new Uri("https://aka.ms/vc14/vc_redist.x64.exe"),
+                "Download Redistributable"
+            );
+        }
     }
 
     // Welcome message stuff. For important changes, the ID is incremented by one by hand whenever something notable changes.
@@ -656,8 +692,10 @@ public partial class MainWindow : Window
                 );
             }
 
+#if !DEBUG
             if (File.Exists(tempPath))
                 File.Delete(tempPath);
+#endif
             totalTime = timingSink.TotalTime;
         });
 
@@ -764,9 +802,10 @@ public partial class MainWindow : Window
                 File.WriteAllBytes(outputPath, uf2Bytes);
                 AppendLog($"Saved UF2 to {outputPath}");
             }
-
+#if !DEBUG
             if (File.Exists(tempPath))
                 File.Delete(tempPath);
+#endif
             totalTime = timingSink.TotalTime;
         });
 

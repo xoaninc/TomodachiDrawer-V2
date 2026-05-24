@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// TomodachiDrawer ESP32-S3 port — Copyright (C) 2026 Xoan <github.com/xoaninc>
+// Modified version of TomodachiDrawer (original (C) Lucas7yoshi, GPL-3.0).
+
 #include "hid_gamepad.h"
 
 #include <string.h>

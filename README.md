@@ -1,4 +1,18 @@
-# TomodachiDrawer
+# TomodachiDrawer V2
+
+> **This is TomodachiDrawer V2** — a modified version of the original
+> [TomodachiDrawer](https://github.com/Lucas7yoshi/TomodachiDrawer) by
+> Lucas7yoshi. It adds **ESP32-S3 support** (in parallel with the existing
+> RP2040 target) and **fixes** to the original code (notably a HID report
+> descriptor size mismatch). Original work © Lucas7yoshi; V2 changes
+> (ESP32-S3 port and fixes) © 2026 Xoan (github.com/xoaninc). Both are
+> licensed under **GPL-3.0** (see [LICENSE](./LICENSE)). Per the GPL, the
+> original author's copyright is preserved and these modifications are
+> distributed openly under the same license.
+>
+> ESP32-S3 firmware lives in
+> [`TomodachiDrawer.Firmware.ESP32/`](./TomodachiDrawer.Firmware.ESP32/) — see
+> its README for build/flash instructions.
 
 TomodachiDrawer is a collection of firmware and software that generates inputs to control a Nintendo Switch to draw arbitrary images in the Palette House.
 

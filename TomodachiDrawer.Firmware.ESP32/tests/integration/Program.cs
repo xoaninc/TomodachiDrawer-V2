@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// TomodachiDrawer V2 — Copyright (C) 2026 Xoan <github.com/xoaninc>
+// Modified version of TomodachiDrawer (original (C) Lucas7yoshi, GPL-3.0).
+//
 // Integration test for the ESP32-S3 firmware's USB HID enumeration.
 //
 //   dotnet run --project tests/integration            # enumeration only

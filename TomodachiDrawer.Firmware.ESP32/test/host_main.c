@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// TomodachiDrawer V2 — Copyright (C) 2026 Xoan <github.com/xoaninc>
+// Modified version of TomodachiDrawer (original (C) Lucas7yoshi, GPL-3.0).
+//
 // Host test runner: compile with clang/gcc alongside tdld_parser.c and
 // tdld_tests.c, then run the resulting executable. Exit code 0 == all passed.
 //

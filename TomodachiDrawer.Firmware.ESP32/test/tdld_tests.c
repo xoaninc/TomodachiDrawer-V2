@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// TomodachiDrawer V2 — Copyright (C) 2026 Xoan <github.com/xoaninc>
+// Modified version of TomodachiDrawer (original (C) Lucas7yoshi, GPL-3.0).
+//
 // Unit tests for the pure .tdld parser. Self-contained (no Unity / no IDF),
 // so the exact same file compiles and runs on the host with clang AND on the
 // ESP32-S3 under ESP-IDF. printf goes to stdout on host and to the

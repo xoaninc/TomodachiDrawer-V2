@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// TomodachiDrawer ESP32-S3 port — Copyright (C) 2026 Xoan <github.com/xoaninc>
+// Modified version of TomodachiDrawer (original (C) Lucas7yoshi, GPL-3.0).
+//
 // USB descriptors for the HORI Pokken Pad the Switch (1 & 2) accepts as a
 // wired Pro Controller. Byte-for-byte the same identity as the RP2040
 // firmware (VID 0x0F0D / PID 0x0092, "POKKEN CONTROLLER").

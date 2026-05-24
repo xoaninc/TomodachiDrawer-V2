@@ -21,3 +21,9 @@ CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
 # (ESP-IDF defaults to enabled; explicitly off for predictable behavior)
 CONFIG_ESP_WIFI_ENABLED=n
 CONFIG_BT_ENABLED=n
+
+# esp_tinyusb: one HID interface, no other classes. In esp_tinyusb 2.x,
+# CFG_TUD_HID is derived directly from CONFIG_TINYUSB_HID_COUNT (the old
+# CONFIG_TINYUSB_HID_ENABLED no longer exists). The descriptors themselves
+# are supplied at runtime via tinyusb_config_t.descriptor.*
+CONFIG_TINYUSB_HID_COUNT=1

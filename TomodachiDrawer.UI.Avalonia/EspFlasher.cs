@@ -6,6 +6,7 @@ using System.IO.Ports;
 using EspDotNet;
 using EspDotNet.Communication;
 using EspDotNet.Loaders;
+using EspDotNet.Loaders.SoftLoader;
 using EspDotNet.Tools;
 using EspDotNet.Tools.Firmware;
 
@@ -62,12 +63,15 @@ internal static class EspFlasher
                     $"Expected an ESP32-S3 on {serialPort} but detected {chip}. " +
                     "Make sure the board is in download mode (hold BOOT, tap RESET).");
 
-            // Plain (uncompressed) ROM-bootloader flash. The compressed path
-            // (softloader + CreateUploadFlashDeflatedTool) was observed to
-            // truncate a ~290KB write, leaving the app partition unbootable
-            // ("invalid segment length 0xffffffff"), so we use the reliable
-            // uncompressed path even though it is a little slower.
-            IUploadTool tool = toolbox.CreateUploadFlashTool(loader, chip);
+            // Run the flasher stub (softloader) first: the ESP32-S3 ROM
+            // bootloader rejects FLASH_BEGIN here ("FlashBegin failed Invalid"),
+            // so flashing must go through the stub like esptool/idf.py do.
+            // Then upload UNCOMPRESSED: ESPTool's deflated path was observed to
+            // truncate a ~290KB write (unbootable app), while uncompressed via
+            // the stub writes the full image reliably. SoftLoader is an ILoader,
+            // so CreateUploadFlashTool accepts it.
+            SoftLoader soft = await toolbox.StartSoftloaderAsync(comm, loader, chip, ct);
+            IUploadTool tool = toolbox.CreateUploadFlashTool(soft, chip);
 
             var firmware = new FirmwareProvider(
                 entryPoint: 0,

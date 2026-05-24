@@ -47,6 +47,13 @@ V2 adds an ESP32-S3 target so you can use a board you may already own instead of
 
 To put the board in **download mode** (needed for any flashing): **hold BOOT, tap RESET, release BOOT.**
 
+### Drivers
+- On **Windows 10/11** the S3's **native USB** port (the one you'll use) is plug-and-play — **no driver needed**.
+- Only if **no COM port appears** (or you use the **UART** port), install the USB-to-UART driver for your board's bridge chip:
+  - **Silicon Labs CP210x** (CP2102): <https://www.silabs.com/software-and-tools/usb-to-uart-bridge-vcp-drivers>
+  - **WCH CH340/CH341**: <https://www.wch-ic.com/downloads/CH341SER_EXE.html>
+- macOS/Linux usually have these built in; see Espressif's [Establish Serial Connection](https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/get-started/establish-serial-connection.html) guide if the port doesn't show.
+
 ### Using the desktop app (no command line needed)
 1. Open the desktop app. The bottom of the left column has an **"ESP32-S3 Output"** section (there's a **"Setup Steps (ESP32)"** button with this guide built in).
 2. **First time only:** put the board in download mode, pick its COM port, press **"Flash Base Firmware (ESP32)"**. When it says Done, tap **RESET** to run it. *(If the LED gets stuck on solid yellow, tap RESET again — the software reset doesn't always start the app.)*

@@ -236,6 +236,22 @@
 								<ColumnDefinition Width="*" />
 								<ColumnDefinition Width="*" />
 							</Grid.ColumnDefinitions>
+							<Button Grid.Column="0" Content="Setup Steps (ESP32)"
+									ToolTip.Tip="Step-by-step guide for flashing and using the ESP32-S3."
+									HorizontalAlignment="Stretch"
+									Margin="2,0,2,0"
+									Click="Esp32ExplanationButton_Click" />
+							<Button Grid.Column="1" Content="In-Game setup Info."
+									ToolTip.Tip="How to set up Palette House in-game (same as the RP2040)."
+									HorizontalAlignment="Stretch"
+									Margin="2,0,2,0"
+									Click="InGameSetupButton_Click" />
+						</Grid>
+						<Grid>
+							<Grid.ColumnDefinitions>
+								<ColumnDefinition Width="*" />
+								<ColumnDefinition Width="*" />
+							</Grid.ColumnDefinitions>
 							<Button Grid.Column="0"
 									x:Name="FlashEsp32FirmwareButton"
 									IsEnabled="False"

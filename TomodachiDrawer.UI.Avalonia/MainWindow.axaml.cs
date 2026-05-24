@@ -1124,6 +1124,34 @@ public partial class MainWindow : Window
         );
     }
 
+    private void Esp32ExplanationButton_Click(object? sender, RoutedEventArgs e)
+    {
+        _ = ShowMessageAsync(
+            "ESP32-S3 Setup Steps",
+            "The ESP32-S3-DevKitC-1 has TWO USB-C ports:\r\n"
+                + "- \"UART\": a USB-serial bridge, fine for flashing.\r\n"
+                + "- \"USB\": the chip's native USB, used for flashing AND for the Switch.\r\n"
+                + "You can do everything over the USB port. Use that one for the Switch.\r\n\r\n"
+                + "To enter DOWNLOAD MODE (needed for any flashing):\r\n"
+                + "hold BOOT, tap RESET, then release BOOT.\r\n\r\n"
+                + "FIRST TIME ONLY — flash the firmware:\r\n"
+                + "1. Enter download mode, pick the COM port, press \"Flash Base Firmware (ESP32)\".\r\n"
+                + "2. When it says Done, tap RESET to run it.\r\n"
+                + "   (If the LED gets stuck on solid yellow, tap RESET again — the software\r\n"
+                + "    reset doesn't always start the app; a manual reset does.)\r\n\r\n"
+                + "FOR EACH IMAGE:\r\n"
+                + "3. Load your image, choose your Switch version, enter download mode again.\r\n"
+                + "4. Press \"Export To ESP32!\" and wait for Done (a real drawing can take a\r\n"
+                + "   while to flash — that's normal).\r\n"
+                + "5. Unplug from the PC and plug the USB port into your Switch.\r\n\r\n"
+                + "LED meanings: dim white = idle, blinking yellow = startup countdown,\r\n"
+                + "green = drawing (button held), red blink = no/invalid image data,\r\n"
+                + "rainbow = finished.\r\n\r\n"
+                + "YOU MUST HAVE \"Pro Controller Wired Communication\" ENABLED:\r\n"
+                + "System Settings -> Controllers & Accessories -> Pro Controller Wired Communication."
+        );
+    }
+
     // this doesnt seem to work >:|
     // atleast on windows.
 

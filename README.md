@@ -29,6 +29,36 @@ It has a crossplatform Avalonia UI desktop app that supports flashing directly t
 ## Hardware Compatibility
 This was designed for an RP2040-Zero as it was one of the cheapest options, however any RP2040 based board *should* be compatible, with support for the LED on the standard Raspberry Pi Pico too.
 
+**V2 also supports the ESP32-S3** (tested on the ESP32-S3-DevKitC-1) in parallel with the RP2040 — see below.
+
+## ESP32-S3 Support (V2)
+
+V2 adds an ESP32-S3 target so you can use a board you may already own instead of an RP2040. It draws on the Switch exactly the same way (it emulates the same HORI Pokken Pad over USB), and the per-drawing data limit is identical (1 MB).
+
+**Validated drawing on a real Switch 2.**
+
+### Which board?
+- ✅ **ESP32-S3** with native USB (e.g. **ESP32-S3-DevKitC-1**). The LED is the onboard NeoPixel (GPIO 48 on the DevKitC-1).
+- ❌ A classic **ESP32 + CP2102** will *not* work — that chip has no native USB device support (the CP2102 is only a serial bridge).
+
+### The DevKitC-1 has two USB-C ports
+- **UART** port (USB-serial bridge): fine for flashing.
+- **USB** port (the S3's native USB): use this for flashing *and* for the Switch. You can do the whole flow on this one port.
+
+To put the board in **download mode** (needed for any flashing): **hold BOOT, tap RESET, release BOOT.**
+
+### Using the desktop app (no command line needed)
+1. Open the desktop app. The bottom of the left column has an **"ESP32-S3 Output"** section (there's a **"Setup Steps (ESP32)"** button with this guide built in).
+2. **First time only:** put the board in download mode, pick its COM port, press **"Flash Base Firmware (ESP32)"**. When it says Done, tap **RESET** to run it. *(If the LED gets stuck on solid yellow, tap RESET again — the software reset doesn't always start the app.)*
+3. **For each image:** load your image (≤ 256×256), choose **Switch 2** as the version, put the board in download mode again, and press **"Export To ESP32!"**. A real drawing can take a while to flash — that's expected.
+4. Unplug from the PC and plug the **USB** port into your Switch.
+5. On the Switch: enable **Settings → Controllers and Sensors → Wired Pro Controller Communication**, open Palette House on the advanced UI, cursor at the top-left, zoomed out, top colour black.
+
+**LED meanings:** dim white = idle, blinking yellow = startup countdown, green = drawing (button held), red blink = no/invalid image data, rainbow = finished.
+
+### Building the firmware from source
+See [`TomodachiDrawer.Firmware.ESP32/README.md`](./TomodachiDrawer.Firmware.ESP32/) for ESP-IDF build/flash/test instructions and the technical notes (including the HID descriptor fix).
+
 ## How To Use
 
 Initial setup requires a few steps, made easier by the UI.

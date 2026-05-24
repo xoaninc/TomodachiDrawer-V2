@@ -79,7 +79,7 @@
 		<Border DockPanel.Dock="Bottom" Background="#11888888" Padding="8,3">
 			<StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="6">
 				<TextBlock VerticalAlignment="Center" FontSize="11" Opacity="0.75"
-				           Text="TomodachiDrawer V2 by xoaninc — based on TomodachiDrawer by Lucas7yoshi" />
+				           Text="TomodachiDrawer V2 by @xoaninc — based on TomodachiDrawer by @Lucas7yoshi" />
 				<Button FontSize="11" Padding="6,1" Content="original repo ↗"
 				        Click="OpenOriginalRepoButton_Click" />
 			</StackPanel>

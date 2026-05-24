@@ -8,6 +8,11 @@ sdkconfig
 sdkconfig.old
 sdkconfig.ci
 
+# Host test build output
+*.exe
+*.obj
+*.o
+
 # IDE / editor metadata
 .cache/
 .vscode/

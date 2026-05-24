@@ -42,6 +42,12 @@ public partial class MainWindow : Window
 
     private bool BusyExporting = false;
 
+    // Cached generated route, reused across Estimate/Export when nothing changed.
+    // Keyed by a fingerprint of (image pixels + draw settings + Switch version).
+    private byte[]? _cachedTdld;
+    private TimeSpan _cachedTime;
+    private string? _cachedFingerprint;
+
     //private SwitchVersion _selectedSwitchVersion = SwitchVersion.None;
     //private int _selectedThemeIndex = 0; // 0 is System.
     private AppSettings _currentSettings = new(); // All cases will result in it being non-null but IntelliSense cant see that far.
@@ -562,36 +568,10 @@ public partial class MainWindow : Window
             try
             {
                 using var img = imageSnapshot;
-                string tempPath = Path.Combine(
-                    Path.GetTempPath(),
-                    $"esp32output{System.Random.Shared.Next(1000000, 9999999)}.tdld"
-                );
-
-                AppendLog($"Generating inputs for ESP32 ({Path.GetFileName(tempPath)})");
-                var timingSink = new TimingSink();
-                var drawer = new CanvasDrawer(
-                    timingSink,
-                    _currentSettings.SelectedSwitchVersion,
-                    AppendLog
-                );
-                drawer.ConnectAndConfirmController();
-                AppendLog("Starting to generate inputs...");
-                await drawer.DrawImage(img, drawSettings);
-                AppendLog($"True complete overall time is: {timingSink.TotalTime.TotalSeconds}s");
-
-                var fileSink = new FileControllerSink(tempPath);
-                timingSink.ReplayTo(fileSink);
-                fileSink.Dispose();
-
-                var tdldBytes = File.ReadAllBytes(tempPath);
+                var (tdldBytes, time) = await GetTdldAsync(img, drawSettings, _currentSettings.SelectedSwitchVersion);
+                totalTime = time;
                 AppendLog($"Flashing {tdldBytes.Length} bytes to the ESP32-S3 tdld partition via {port} ...");
                 await EspFlasher.FlashTdldAsync(port, tdldBytes, null, _cts.Token);
-
-#if !DEBUG
-                if (File.Exists(tempPath))
-                    File.Delete(tempPath);
-#endif
-                totalTime = timingSink.TotalTime;
             }
             catch (Exception ex) { error = ex.Message; }
         });
@@ -871,28 +851,9 @@ public partial class MainWindow : Window
         await Task.Run(async () =>
         {
             using var img = imageSnapshot;
-            string tempPath = Path.Combine(
-                Path.GetTempPath(),
-                $"rp2040output{System.Random.Shared.Next(1000000, 9999999)}.tdld"
-            );
+            var (tdldBytes, time) = await GetTdldAsync(img, drawSettings, _currentSettings.SelectedSwitchVersion);
+            totalTime = time;
 
-            AppendLog($"Exporting to RP2040 flash ({Path.GetFileName(tempPath)})");
-            var timingSink = new TimingSink();
-            var drawer = new CanvasDrawer(
-                timingSink,
-                _currentSettings.SelectedSwitchVersion,
-                AppendLog
-            );
-            drawer.ConnectAndConfirmController();
-            AppendLog("Starting to generate inputs...");
-            await drawer.DrawImage(img, drawSettings);
-            AppendLog($"True complete overall time is: {timingSink.TotalTime.TotalSeconds}s");
-
-            var fileSink = new FileControllerSink(tempPath);
-            timingSink.ReplayTo(fileSink);
-            fileSink.Dispose();
-
-            var tdldBytes = File.ReadAllBytes(tempPath);
             var uf2Bytes = UF2Flasher.BuildTDLDUF2(tdldBytes);
             var drivePath = UF2Flasher.FindRP2040Drive();
 
@@ -903,12 +864,6 @@ public partial class MainWindow : Window
                     "Wrote to RP2040 flash. Unplug the RP2040 and plug it into the switch without holding any button."
                 );
             }
-
-#if !DEBUG
-            if (File.Exists(tempPath))
-                File.Delete(tempPath);
-#endif
-            totalTime = timingSink.TotalTime;
         });
 
         BusyExporting = false;
@@ -942,6 +897,55 @@ public partial class MainWindow : Window
         DrawTimeLabel.Text = $"Draw Time Estimate: {estimateStr}";
     }
 
+    // A hash of everything that affects the generated route. If two calls produce
+    // the same fingerprint, the cached .tdld is safe to reuse.
+    private static string ComputeFingerprint(SKBitmap img, DrawImageSettings settings, SwitchVersion ver)
+    {
+        using var ms = new MemoryStream();
+        var pixels = img.Bytes;
+        ms.Write(pixels, 0, pixels.Length);
+        var meta = System.Text.Encoding.UTF8.GetBytes(
+            $"|{img.Width}x{img.Height}|{ver}|{JsonSerializer.Serialize(settings)}"
+        );
+        ms.Write(meta, 0, meta.Length);
+        ms.Position = 0;
+        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(ms));
+    }
+
+    // Generates the .tdld for the given image/settings, OR returns the cached one
+    // if the inputs are byte-for-byte identical to the last generation. Runs the
+    // (slow) route generation only on a cache miss. Call from a background thread.
+    private async Task<(byte[] tdld, TimeSpan time)> GetTdldAsync(
+        SKBitmap img, DrawImageSettings settings, SwitchVersion ver)
+    {
+        var fingerprint = ComputeFingerprint(img, settings, ver);
+        if (fingerprint == _cachedFingerprint && _cachedTdld != null)
+        {
+            AppendLog("Reusing cached route (image and settings unchanged) — no re-generation needed.");
+            return (_cachedTdld, _cachedTime);
+        }
+
+        var tempPath = Path.Combine(
+            Path.GetTempPath(),
+            $"tdld{System.Random.Shared.Next(1000000, 9999999)}.tdld"
+        );
+        var timingSink = new TimingSink();
+        var drawer = new CanvasDrawer(timingSink, ver, AppendLog);
+        drawer.ConnectAndConfirmController();
+        await drawer.DrawImage(img, settings);
+
+        var fileSink = new FileControllerSink(tempPath);
+        timingSink.ReplayTo(fileSink);
+        fileSink.Dispose();
+        var bytes = File.ReadAllBytes(tempPath);
+        try { File.Delete(tempPath); } catch { /* best effort */ }
+
+        _cachedTdld = bytes;
+        _cachedTime = timingSink.TotalTime;
+        _cachedFingerprint = fingerprint;
+        return (bytes, timingSink.TotalTime);
+    }
+
     // Computes the draw-time estimate WITHOUT flashing, so it can be seen before
     // committing to an export. Runs the same route generation an export does.
     private async void EstimateButton_Click(object? sender, RoutedEventArgs e)
@@ -972,15 +976,8 @@ public partial class MainWindow : Window
             try
             {
                 using var img = imageSnapshot;
-                var timingSink = new TimingSink();
-                var drawer = new CanvasDrawer(
-                    timingSink,
-                    _currentSettings.SelectedSwitchVersion,
-                    AppendLog
-                );
-                drawer.ConnectAndConfirmController();
-                await drawer.DrawImage(img, drawSettings);
-                totalTime = timingSink.TotalTime;
+                var (_, time) = await GetTdldAsync(img, drawSettings, _currentSettings.SelectedSwitchVersion);
+                totalTime = time;
             }
             catch (Exception ex) { error = ex.Message; }
         });
@@ -1042,40 +1039,15 @@ public partial class MainWindow : Window
         await Task.Run(async () =>
         {
             using var img = imageSnapshot;
-            string tempPath = Path.Combine(
-                Path.GetTempPath(),
-                $"rp2040output{System.Random.Shared.Next(1000000, 9999999)}.tdld"
-            );
+            var (tdldBytes, time) = await GetTdldAsync(img, drawSettings, _currentSettings.SelectedSwitchVersion);
+            totalTime = time;
 
-            AppendLog($"Exporting to UF2 ({Path.GetFileName(tempPath)})");
-            var timingSink = new TimingSink();
-            var drawer = new CanvasDrawer(
-                timingSink,
-                _currentSettings.SelectedSwitchVersion,
-                AppendLog
-            );
-            drawer.ConnectAndConfirmController();
-            AppendLog("Starting to generate inputs...");
-            await drawer.DrawImage(img, drawSettings);
-            AppendLog($"True complete overall time is: {timingSink.TotalTime.TotalSeconds}s");
-
-            var fileSink = new FileControllerSink(tempPath);
-            timingSink.ReplayTo(fileSink);
-            fileSink.Dispose();
-
-            var tdldBytes = File.ReadAllBytes(tempPath);
             var uf2Bytes = UF2Flasher.BuildTDLDUF2(tdldBytes);
-
             if (uf2Bytes != null && uf2Bytes.Length > 0)
             {
                 File.WriteAllBytes(outputPath, uf2Bytes);
                 AppendLog($"Saved UF2 to {outputPath}");
             }
-#if !DEBUG
-            if (File.Exists(tempPath))
-                File.Delete(tempPath);
-#endif
-            totalTime = timingSink.TotalTime;
         });
 
         ExportUF2Button.IsEnabled = true;

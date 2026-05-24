@@ -1,0 +1,23 @@
+# Custom partition table (factory app + 1MB tdld data partition)
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+CONFIG_PARTITION_TABLE_FILENAME="partitions.csv"
+
+# 2MB flash (matches RP2040 layout: 1MB app + 1MB tdld)
+CONFIG_ESPTOOLPY_FLASHSIZE_2MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="2MB"
+
+# 1ms FreeRTOS tick for precise vTaskDelay (matches RP2040 timing)
+CONFIG_FREERTOS_HZ=1000
+
+# Route console (ESP_LOG) over the ESP32-S3 native USB-Serial-JTAG port,
+# so flashing+monitor both work over the same USB-C cable on the "USB" port
+# of the DevKitC-1. The Switch HID role takes over the USB peripheral once
+# tinyusb_driver_install is called, so console output stops being available
+# during Switch playback (expected).
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+
+# Disable WiFi & Bluetooth (we are a USB HID gamepad, save power + memory)
+# (ESP-IDF defaults to enabled; explicitly off for predictable behavior)
+CONFIG_ESP_WIFI_ENABLED=n
+CONFIG_BT_ENABLED=n

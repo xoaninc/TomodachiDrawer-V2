@@ -1,0 +1,17 @@
+# ESP-IDF build artifacts
+build/
+managed_components/
+dependencies.lock
+
+# Generated sdkconfig (board/target-specific, regenerated from sdkconfig.defaults)
+sdkconfig
+sdkconfig.old
+sdkconfig.ci
+
+# IDE / editor metadata
+.cache/
+.vscode/
+.idea/
+*.swp
+
+# Parallel-session plugin metadata (do not commit)

@@ -1438,6 +1438,10 @@ public partial class MainWindow : Window
     private void MenuHelpOpenGitHub_Click(object? sender, RoutedEventArgs e) =>
         Launcher.LaunchUriAsync(new Uri("https://github.com/Lucas7yoshi/TomodachiDrawer"));
 
+    // Footer credit link to the ORIGINAL project (this is a derivative; GPL-3.0).
+    private void OpenOriginalRepoButton_Click(object? sender, RoutedEventArgs e) =>
+        Launcher.LaunchUriAsync(new Uri("https://github.com/Lucas7yoshi/TomodachiDrawer"));
+
     private void MenuHelpAbout_Click(object? sender, RoutedEventArgs e)
     {
         var message = $"TomodachiDrawer {GetVersionString(false)}";

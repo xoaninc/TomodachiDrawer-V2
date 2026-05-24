@@ -13,6 +13,7 @@ using Microsoft.Win32;
 
 using SkiaSharp;
 
+using System.IO.Ports;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -84,6 +85,7 @@ public partial class MainWindow : Window
 #endif
 
         StartRP2040Polling();
+        StartEsp32Polling();
         if (CheckForUpdatesCheckBox.IsChecked)
             _ = PerformAsyncUpdateCheck();
 
@@ -407,6 +409,208 @@ public partial class MainWindow : Window
                 }
             }
         });
+    }
+
+    // ── ESP32-S3 ──────────────────────────────────────────────────────
+
+    private const string esp32FirmwareFileName = "TomodachiDrawer.Firmware.ESP32.bin";
+    private string[] _esp32Ports = Array.Empty<string>();
+
+    private static string GetEsp32FirmwareFilePath()
+    {
+        var baseDirectory = AppContext.BaseDirectory;
+        if (OperatingSystem.IsMacOS() && baseDirectory.Contains(".app/Contents/MacOS"))
+            return Path.Combine(baseDirectory, esp32FirmwareFileName);
+        return esp32FirmwareFileName;
+    }
+
+    // Unlike the RP2040 (which mounts as a drive in BOOT mode), the ESP32-S3
+    // exposes a serial port only while in download mode. We list serial ports
+    // and let the user pick; the chip type is validated at flash time.
+    private void StartEsp32Polling()
+    {
+        _ = Task.Run(async () =>
+        {
+            while (!_cts.Token.IsCancellationRequested)
+            {
+                string[] ports;
+                try { ports = SerialPort.GetPortNames().Distinct().OrderBy(p => p).ToArray(); }
+                catch { ports = Array.Empty<string>(); }
+
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    bool hasImage = _currentImage != null;
+
+                    if (!_esp32Ports.SequenceEqual(ports))
+                    {
+                        var previous = ESP32PortComboBox.SelectedItem as string;
+                        _esp32Ports = ports;
+                        ESP32PortComboBox.ItemsSource = ports;
+                        if (previous != null && ports.Contains(previous))
+                            ESP32PortComboBox.SelectedItem = previous;
+                        else if (ports.Length > 0)
+                            ESP32PortComboBox.SelectedIndex = 0;
+                    }
+
+                    bool portSelected = ESP32PortComboBox.SelectedItem is string;
+                    if (ports.Length > 0)
+                    {
+                        ESP32StatusLabel.Text = $"ESP32: {ports.Length} serial port(s) — pick the one in download mode";
+                        ESP32StatusLabel.Foreground = Brushes.Green;
+                    }
+                    else
+                    {
+                        ESP32StatusLabel.Text = "ESP32 not found — hold BOOT, tap RESET, release BOOT";
+                        ESP32StatusLabel.Foreground = Brushes.Red;
+                    }
+
+                    FlashEsp32FirmwareButton.IsEnabled = portSelected && !BusyExporting;
+                    ExportEsp32Button.IsEnabled = portSelected && hasImage && !BusyExporting;
+                });
+
+                try { await Task.Delay(1000, _cts.Token); }
+                catch (System.OperationCanceledException) { break; }
+            }
+        });
+    }
+
+    private async void FlashEsp32FirmwareButton_Click(object? sender, RoutedEventArgs e)
+    {
+        if (ESP32PortComboBox.SelectedItem is not string port)
+        {
+            _ = ShowMessageAsync("ESP32", "Select the ESP32 serial port first. The board must be in download mode (hold BOOT, tap RESET, release BOOT).");
+            return;
+        }
+
+        var firmwarePath = GetEsp32FirmwareFilePath();
+        if (!File.Exists(firmwarePath))
+        {
+            _ = ShowMessageAsync(
+                "Error flashing ESP32 base firmware",
+                $"Could not locate {esp32FirmwareFileName}.\nMake sure you run the app from its extracted folder."
+            );
+            return;
+        }
+        var bytes = File.ReadAllBytes(firmwarePath);
+
+        BusyExporting = true;
+        FlashEsp32FirmwareButton.IsEnabled = false;
+        ExportEsp32Button.IsEnabled = false;
+        AppendLog($"Flashing ESP32-S3 base firmware via {port} ...");
+
+        string? error = null;
+        await Task.Run(async () =>
+        {
+            try
+            {
+                await EspFlasher.FlashBaseFirmwareAsync(port, bytes, null, _cts.Token);
+            }
+            catch (Exception ex) { error = ex.Message; }
+        });
+
+        BusyExporting = false;
+        if (error != null)
+        {
+            AppendLog($"ESP32 base firmware flash failed: {error}");
+            _ = ShowMessageAsync("ESP32 flash failed", error);
+        }
+        else
+        {
+            AppendLog("Flashed ESP32-S3 base firmware.\r\n");
+            _ = ShowMessageAsync(
+                "Done",
+                "ESP32-S3 base firmware flashed! Tap RESET on the board to run it, then load an image and press \"Export To ESP32!\"."
+            );
+        }
+    }
+
+    private async void ExportEsp32Button_Click(object? sender, RoutedEventArgs e)
+    {
+        if (_currentImage == null)
+            return;
+
+        if (ESP32PortComboBox.SelectedItem is not string port)
+        {
+            _ = ShowMessageAsync("ESP32", "Select the ESP32 serial port first. The board must be in download mode (hold BOOT, tap RESET, release BOOT).");
+            return;
+        }
+
+        if (_currentSettings.SelectedSwitchVersion == SwitchVersion.None)
+        {
+            _ = ShowMessageAsync(
+                "Select Switch Version",
+                "For compatibility, you must select a switch version in the dropdown."
+            );
+            return;
+        }
+
+        var imageSnapshot = _currentImage!.Copy();
+        var drawSettings = GetDrawImageSettings();
+
+        BusyExporting = true;
+        ExportEsp32Button.IsEnabled = false;
+        TimeSpan totalTime = TimeSpan.MaxValue;
+        string? error = null;
+
+        await Task.Run(async () =>
+        {
+            try
+            {
+                using var img = imageSnapshot;
+                string tempPath = Path.Combine(
+                    Path.GetTempPath(),
+                    $"esp32output{System.Random.Shared.Next(1000000, 9999999)}.tdld"
+                );
+
+                AppendLog($"Generating inputs for ESP32 ({Path.GetFileName(tempPath)})");
+                var timingSink = new TimingSink();
+                var drawer = new CanvasDrawer(
+                    timingSink,
+                    _currentSettings.SelectedSwitchVersion,
+                    AppendLog
+                );
+                drawer.ConnectAndConfirmController();
+                AppendLog("Starting to generate inputs...");
+                await drawer.DrawImage(img, drawSettings);
+                AppendLog($"True complete overall time is: {timingSink.TotalTime.TotalSeconds}s");
+
+                var fileSink = new FileControllerSink(tempPath);
+                timingSink.ReplayTo(fileSink);
+                fileSink.Dispose();
+
+                var tdldBytes = File.ReadAllBytes(tempPath);
+                AppendLog($"Flashing {tdldBytes.Length} bytes to the ESP32-S3 tdld partition via {port} ...");
+                await EspFlasher.FlashTdldAsync(port, tdldBytes, null, _cts.Token);
+
+#if !DEBUG
+                if (File.Exists(tempPath))
+                    File.Delete(tempPath);
+#endif
+                totalTime = timingSink.TotalTime;
+            }
+            catch (Exception ex) { error = ex.Message; }
+        });
+
+        BusyExporting = false;
+        ExportEsp32Button.IsEnabled = true;
+
+        if (error != null)
+        {
+            AppendLog($"ESP32 export failed: {error}");
+            _ = ShowMessageAsync("ESP32 export failed", error);
+        }
+        else
+        {
+            SetEstimate(totalTime);
+            _ = ShowMessageAsync(
+                "Done",
+                "Drawing data flashed to the ESP32-S3!\n\n"
+                    + "1. Unplug it from the PC.\n"
+                    + "2. Plug it into the Switch using the port labelled USB on the DevKitC-1 (not UART).\n"
+                    + "3. Make sure \"Wired Pro Controller Communication\" is enabled in the Switch settings,\n"
+                    + "   with Palette House open, pen at the top-left, zoomed out, top colour black."
+            );
+        }
     }
 
     #region Image/Preview

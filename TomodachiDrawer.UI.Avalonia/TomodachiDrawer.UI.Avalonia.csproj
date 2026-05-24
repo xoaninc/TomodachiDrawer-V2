@@ -38,6 +38,9 @@
     <None Update="TomodachiDrawer.Firmware.uf2">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="TomodachiDrawer.Firmware.ESP32.bin">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
   <Target Name="RemoveNativePdbs" AfterTargets="Publish">
     <!-- Delete large native pdbs of minimal value -->

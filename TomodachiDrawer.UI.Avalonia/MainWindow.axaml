@@ -88,6 +88,7 @@
 					<RowDefinition Height="*" />
 					<RowDefinition Height="Auto" />
 					<RowDefinition Height="Auto" />
+					<RowDefinition Height="Auto" />
 				</Grid.RowDefinitions>
 				<Border Grid.Row="0" Classes="group" Margin="0,0,0,6">
 					<StackPanel Spacing="6">
@@ -218,6 +219,41 @@
 							Click="ExportUF2Button_Click"
 						/>
 
+					</StackPanel>
+				</Border>
+				<Border Grid.Row="5" Classes="group" Margin="0,6,0,0">
+					<StackPanel Spacing="5">
+						<TextBlock Classes="header" Text="ESP32-S3 Output (experimental)" />
+						<TextBlock x:Name="ESP32StatusLabel"
+								   Text="ESP32 Status: Not Found"
+								   ToolTip.Tip="The ESP32-S3 only exposes a serial port while in download mode. Hold BOOT, tap RESET, release BOOT to enter it." />
+						<ComboBox x:Name="ESP32PortComboBox"
+								  HorizontalAlignment="Stretch"
+								  Margin="2,0,2,0"
+								  ToolTip.Tip="Serial port of the ESP32-S3 in download mode." />
+						<Grid>
+							<Grid.ColumnDefinitions>
+								<ColumnDefinition Width="*" />
+								<ColumnDefinition Width="*" />
+							</Grid.ColumnDefinitions>
+							<Button Grid.Column="0"
+									x:Name="FlashEsp32FirmwareButton"
+									IsEnabled="False"
+									Content="Flash Base Firmware (ESP32)"
+									ToolTip.Tip="Flash the ESP32-S3 base firmware. Put the board in download mode first: hold BOOT, tap RESET, release BOOT."
+									HorizontalAlignment="Stretch"
+									Margin="2,0,2,0"
+									Click="FlashEsp32FirmwareButton_Click" />
+							<Button Grid.Column="1"
+									x:Name="ExportEsp32Button"
+									IsEnabled="False"
+									Content="Export To ESP32!"
+									ToolTip.Tip="Processes the image and flashes the drawing data to the ESP32-S3 tdld partition. Flash the base firmware once first."
+									FontWeight="Bold"
+									HorizontalAlignment="Stretch"
+									Margin="2,0,2,0"
+									Click="ExportEsp32Button_Click" />
+						</Grid>
 					</StackPanel>
 				</Border>
 			</Grid>

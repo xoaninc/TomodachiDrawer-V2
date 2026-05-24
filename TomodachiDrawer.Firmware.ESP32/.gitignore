@@ -13,6 +13,9 @@ sdkconfig.ci
 *.obj
 *.o
 
+# Local test .tdld fixtures (generated ad hoc, not source)
+*.tdld
+
 # IDE / editor metadata
 .cache/
 .vscode/

@@ -527,10 +527,17 @@ public partial class MainWindow : Window
         }
         else
         {
-            AppendLog("Flashed ESP32-S3 base firmware.\r\n");
+            AppendLog("Flashed ESP32-S3 base firmware. Board is still in download mode — you can Export now.\r\n");
             _ = ShowMessageAsync(
                 "Done",
-                "ESP32-S3 base firmware flashed! Tap RESET on the board to run it, then load an image and press \"Export To ESP32!\"."
+                "ESP32-S3 base firmware flashed!\n\n"
+                    + "The board is STILL in download mode, so do NOT press RESET yet:\n"
+                    + "1. Load your image and choose your Switch version.\n"
+                    + "2. Press \"Export To ESP32!\" right now (no reset needed in between).\n"
+                    + "3. Then unplug and connect to the Switch (or tap RESET to test on the LED).\n\n"
+                    + "Note: once you press RESET the firmware runs as the controller, the serial\n"
+                    + "port disappears, and flashing is disabled until you re-enter download mode\n"
+                    + "(hold BOOT, tap RESET, release BOOT)."
             );
         }
     }
@@ -1174,16 +1181,21 @@ public partial class MainWindow : Window
                 + "  - WCH CH340/CH341: https://www.wch-ic.com/downloads/CH341SER_EXE.html\r\n\r\n"
                 + "To enter DOWNLOAD MODE (needed for any flashing):\r\n"
                 + "hold BOOT, tap RESET, then release BOOT.\r\n\r\n"
-                + "FIRST TIME ONLY — flash the firmware:\r\n"
-                + "1. Enter download mode, pick the COM port, press \"Flash Base Firmware (ESP32)\".\r\n"
-                + "2. When it says Done, tap RESET to run it.\r\n"
-                + "   (If the LED gets stuck on solid yellow, tap RESET again — the software\r\n"
-                + "    reset doesn't always start the app; a manual reset does.)\r\n\r\n"
-                + "FOR EACH IMAGE:\r\n"
-                + "3. Load your image, choose your Switch version, enter download mode again.\r\n"
-                + "4. Press \"Export To ESP32!\" and wait for Done (a real drawing can take a\r\n"
-                + "   while to flash — that's normal).\r\n"
-                + "5. Unplug from the PC and plug the USB port into your Switch.\r\n\r\n"
+                + "KEY IDEA: you can only flash while in DOWNLOAD MODE (a COM port shows up).\r\n"
+                + "Once the firmware runs it becomes the controller, the port disappears, and\r\n"
+                + "flashing is disabled until you re-enter download mode. So do the flashing\r\n"
+                + "first, and only reset/unplug at the very end.\r\n\r\n"
+                + "FIRST TIME (firmware + image in one go):\r\n"
+                + "1. Enter download mode, pick the COM port.\r\n"
+                + "2. Press \"Flash Base Firmware (ESP32)\". When it says Done, do NOT reset.\r\n"
+                + "3. Load your image, choose your Switch version, press \"Export To ESP32!\"\r\n"
+                + "   (the board is still in download mode — no reset needed in between).\r\n"
+                + "4. Unplug from the PC and plug the USB port into your Switch.\r\n\r\n"
+                + "FOR LATER IMAGES (firmware already flashed):\r\n"
+                + "- Enter download mode again, load the image, press \"Export To ESP32!\",\r\n"
+                + "  then unplug to the Switch.\r\n\r\n"
+                + "(If the LED gets stuck on solid yellow after a reset, tap RESET again — the\r\n"
+                + " software reset doesn't always start the app; a manual reset does.)\r\n\r\n"
                 + "LED meanings: dim white = idle, blinking yellow = startup countdown,\r\n"
                 + "green = drawing (button held), red blink = no/invalid image data,\r\n"
                 + "rainbow = finished.\r\n\r\n"

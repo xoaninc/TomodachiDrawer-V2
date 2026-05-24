@@ -370,8 +370,9 @@ public partial class MainWindow : Window
                 {
                     bool hasImage = _currentImage != null;
 
-                    // ExportUF2 only needs an image — no RP2040 required
+                    // ExportUF2 and Estimate only need an image — no RP2040 required
                     ExportUF2Button.IsEnabled = hasImage;
+                    EstimateButton.IsEnabled = hasImage && !BusyExporting;
 
                     if (path != null)
                     {
@@ -939,6 +940,63 @@ public partial class MainWindow : Window
     {
         var estimateStr = $"{time:h\\hm\\ms\\s}";
         DrawTimeLabel.Text = $"Draw Time Estimate: {estimateStr}";
+    }
+
+    // Computes the draw-time estimate WITHOUT flashing, so it can be seen before
+    // committing to an export. Runs the same route generation an export does.
+    private async void EstimateButton_Click(object? sender, RoutedEventArgs e)
+    {
+        if (_currentImage == null)
+            return;
+
+        if (_currentSettings.SelectedSwitchVersion == SwitchVersion.None)
+        {
+            _ = ShowMessageAsync(
+                "Select Switch Version",
+                "For an accurate estimate, select a Switch version first (it affects the generated route)."
+            );
+            return;
+        }
+
+        var imageSnapshot = _currentImage!.Copy();
+        var drawSettings = GetDrawImageSettings();
+
+        BusyExporting = true;
+        EstimateButton.IsEnabled = false;
+        DrawTimeLabel.Text = "Draw Time Estimate: estimating…";
+        TimeSpan totalTime = TimeSpan.MaxValue;
+        string? error = null;
+
+        await Task.Run(async () =>
+        {
+            try
+            {
+                using var img = imageSnapshot;
+                var timingSink = new TimingSink();
+                var drawer = new CanvasDrawer(
+                    timingSink,
+                    _currentSettings.SelectedSwitchVersion,
+                    AppendLog
+                );
+                drawer.ConnectAndConfirmController();
+                await drawer.DrawImage(img, drawSettings);
+                totalTime = timingSink.TotalTime;
+            }
+            catch (Exception ex) { error = ex.Message; }
+        });
+
+        BusyExporting = false;
+        EstimateButton.IsEnabled = true;
+
+        if (error != null)
+        {
+            AppendLog($"Estimate failed: {error}");
+            DrawTimeLabel.Text = "Draw Time Estimate: ???";
+        }
+        else
+        {
+            SetEstimate(totalTime);
+        }
     }
 
     private async void ExportUF2Button_Click(object sender, RoutedEventArgs e)

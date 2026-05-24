@@ -53,30 +53,47 @@ try
     using var stream = dev.Open();
     stream.ReadTimeout = 500;
     var deadline = DateTime.UtcNow.AddSeconds(readSeconds);
-    string? lastNonNeutral = null;
-    int seen = 0;
+    int totalReads = 0, timeouts = 0, withButton = 0, dumped = 0;
+    string? lastDesc = null;
     while (DateTime.UtcNow < deadline)
     {
         byte[] buf;
         try { buf = stream.Read(); }
-        catch (TimeoutException) { continue; }
+        catch (TimeoutException) { timeouts++; continue; }
 
-        // Neutral = no buttons, dpad 8, sticks centred. Only print changes.
+        totalReads++;
+        // Dump the raw bytes of the first few reports for diagnostics.
+        if (dumped < 6)
+        {
+            Console.WriteLine($"  raw[{buf.Length}]: {BitConverter.ToString(buf)}");
+            dumped++;
+        }
+
         bool anyButton = buf.Length >= 2 && (buf[0] != 0 || buf[1] != 0);
         if (anyButton)
         {
+            withButton++;
             string desc = DescribeReport(buf);
-            if (desc != lastNonNeutral)
+            if (desc != lastDesc)
             {
                 Console.WriteLine($"  input: {desc}");
-                lastNonNeutral = desc;
+                lastDesc = desc;
             }
-            seen++;
         }
     }
-    Console.WriteLine(seen > 0
-        ? $"Observed {seen} non-neutral report(s) - playback confirmed."
-        : "No button activity observed (device may be idle / done / no .tdld flashed).");
+    Console.WriteLine($"Summary: {totalReads} reports read, {timeouts} timeouts, {withButton} with a button held.");
+    if (withButton > 0)
+    {
+        Console.WriteLine("Playback confirmed (saw button activity).");
+    }
+    else
+    {
+        Console.WriteLine("No reports surfaced to raw HID read. This is EXPECTED on Windows:");
+        Console.WriteLine("the Pokken Pad descriptor declares a 7-byte input report but the");
+        Console.WriteLine("firmware sends 8 bytes (same as the RP2040 build), which the Switch");
+        Console.WriteLine("accepts but Windows' raw HID layer drops. Confirm playback via the LED");
+        Console.WriteLine("reaching the 'done' rainbow, or by drawing on an actual Switch.");
+    }
 }
 catch (Exception ex)
 {

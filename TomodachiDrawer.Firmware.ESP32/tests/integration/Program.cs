@@ -13,13 +13,23 @@ using HidSharp;
 const int VID = 0x0F0D;
 const int PID = 0x0092;
 
-// Report byte 0 holds the first 8 buttons (bit0=Y, bit1=B, bit2=A, bit3=X, ...)
-// matching the RP2040 firmware's report layout [Btn1,Btn2,DPad,LX,LY,RX,RY,Pad].
+// On Windows HidSharp returns the report with a leading 1-byte Report ID
+// (0x00 when the device declares no report IDs), so the 8 data bytes
+// [Btn1,Btn2,DPad,LX,LY,RX,RY,Pad] start at index 1. d() resolves a data
+// index to its buffer offset, tolerating builds/platforms with no prefix.
 static string DescribeReport(byte[] r)
 {
-    if (r.Length < 8) return $"short report ({r.Length} bytes)";
-    return $"Btn1=0x{r[0]:X2} Btn2=0x{r[1]:X2} DPad={r[2]} " +
-           $"LX={r[3]} LY={r[4]} RX={r[5]} RY={r[6]}";
+    int off = r.Length >= 9 ? 1 : 0;   // skip Report ID prefix if present
+    byte D(int i) => (off + i) < r.Length ? r[off + i] : (byte)0;
+    return $"Btn1=0x{D(0):X2} Btn2=0x{D(1):X2} DPad={D(2)} " +
+           $"LX={D(3)} LY={D(4)} RX={D(5)} RY={D(6)}";
+}
+
+// True if any of the 16 buttons are held, accounting for the Report ID prefix.
+static bool AnyButton(byte[] r)
+{
+    int off = r.Length >= 9 ? 1 : 0;
+    return r.Length > off + 1 && (r[off] != 0 || r[off + 1] != 0);
 }
 
 var devices = DeviceList.Local.GetHidDevices(VID, PID).ToList();
@@ -69,8 +79,7 @@ try
             dumped++;
         }
 
-        bool anyButton = buf.Length >= 2 && (buf[0] != 0 || buf[1] != 0);
-        if (anyButton)
+        if (AnyButton(buf))
         {
             withButton++;
             string desc = DescribeReport(buf);
@@ -88,11 +97,9 @@ try
     }
     else
     {
-        Console.WriteLine("No reports surfaced to raw HID read. This is EXPECTED on Windows:");
-        Console.WriteLine("the Pokken Pad descriptor declares a 7-byte input report but the");
-        Console.WriteLine("firmware sends 8 bytes (same as the RP2040 build), which the Switch");
-        Console.WriteLine("accepts but Windows' raw HID layer drops. Confirm playback via the LED");
-        Console.WriteLine("reaching the 'done' rainbow, or by drawing on an actual Switch.");
+        Console.WriteLine("No button activity observed. The device may be idle, already finished");
+        Console.WriteLine("its .tdld program (LED rainbow), or have no .tdld flashed. Re-flash a");
+        Console.WriteLine("program that holds a button and reset the board, then read again.");
     }
 }
 catch (Exception ex)

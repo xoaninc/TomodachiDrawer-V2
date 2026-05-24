@@ -79,9 +79,9 @@ public partial class MainWindow : Window
         AddHandler(DragDrop.DragOverEvent, OnDragOver);
 
 #if DEBUG
-        this.Title = $"TomodachiDrawer.UI.Avalonia - {GetVersionString(true)}";
+        this.Title = $"TomodachiDrawer V2 (dev) - {GetVersionString(true)}";
 #else
-        this.Title = $"TomodachiDrawer - {GetVersionString(false)}";
+        this.Title = $"TomodachiDrawer V2 - {GetVersionString(false)}";
 #endif
 
         StartRP2040Polling();
@@ -182,13 +182,17 @@ public partial class MainWindow : Window
 
     // Welcome message stuff. For important changes, the ID is incremented by one by hand whenever something notable changes.
     // This is only really needed for Mac since its settings are saved in a way that persists more readily.
-    private const int CURRENT_WELCOME_ID = 2;
+    private const int CURRENT_WELCOME_ID = 3;
     private async void ShowWelcomeMessage()
     {
         await ShowMessageAsync(
-            "Welcome to TomodachiDrawer",
-            "0.5.0 adds a tool for helping you with more complex, non square templates." +
-            "\nAt the top menu bar, select \"Templates\" and choose the item type you want, it will open an editor with a preview of the layout, and copy it to your clipboard for you to easily edit in other image editing software."
+            "Welcome to TomodachiDrawer V2",
+            "This is TomodachiDrawer V2 — a fork by @xoaninc that adds ESP32-S3 support "
+            + "(alongside the original RP2040) plus fixes, based on the original by @Lucas7yoshi.\n\n"
+            + "New: the left panel has an \"ESP32-S3 Output\" section to flash an ESP32-S3 and "
+            + "draw on your Switch. Press \"Setup Steps (ESP32)\" there for a full guide.\n\n"
+            + "Free software under GPL-3.0; the original project's credit is preserved. "
+            + "Use Help → Open GitHub Repo for this V2 project."
         );
     }
 
@@ -267,7 +271,7 @@ public partial class MainWindow : Window
             http.DefaultRequestHeaders.UserAgent.ParseAdd($"TomodachiDrawer {ourVersion}");
 
             using var response = await http.GetAsync(
-                "https://api.github.com/repos/Lucas7yoshi/TomodachiDrawer/releases/latest"
+                "https://api.github.com/repos/xoaninc/TomodachiDrawer-V2/releases/latest"
             );
             response.EnsureSuccessStatusCode();
             using var responseStream = await response.Content.ReadAsStreamAsync();
@@ -290,8 +294,8 @@ public partial class MainWindow : Window
                             + $"\nCurrent Version: {ourVersion}"
                             + $"\nLatest Version: {releaseVersionTag}"
                             + $"\nVersion title: {responseJsonObject.RootElement.GetProperty("name").GetString() ?? "N/A"}"
-                            + $"\n\nDownload at:\nhttps://github.com/Lucas7yoshi/TomodachiDrawer",
-                        new Uri("https://github.com/Lucas7yoshi/TomodachiDrawer/releases"),
+                            + $"\n\nDownload at:\nhttps://github.com/xoaninc/TomodachiDrawer-V2",
+                        new Uri("https://github.com/xoaninc/TomodachiDrawer-V2/releases"),
                         "Open Releases"
                     );
                 }
@@ -1441,8 +1445,9 @@ public partial class MainWindow : Window
     }
 #endif
 
+    // Help menu -> this V2 project's repo.
     private void MenuHelpOpenGitHub_Click(object? sender, RoutedEventArgs e) =>
-        Launcher.LaunchUriAsync(new Uri("https://github.com/Lucas7yoshi/TomodachiDrawer"));
+        Launcher.LaunchUriAsync(new Uri("https://github.com/xoaninc/TomodachiDrawer-V2"));
 
     // Footer credit link to the ORIGINAL project (this is a derivative; GPL-3.0).
     private void OpenOriginalRepoButton_Click(object? sender, RoutedEventArgs e) =>
@@ -1450,15 +1455,17 @@ public partial class MainWindow : Window
 
     private void MenuHelpAbout_Click(object? sender, RoutedEventArgs e)
     {
-        var message = $"TomodachiDrawer {GetVersionString(false)}";
+        var message = $"TomodachiDrawer V2 {GetVersionString(false)}";
         var commit = GetVersionString(true).Split("+").Last();
         message += $"\nBuilt from commit: {commit}";
 
         message +=
-            $"\n\nCreated by Lucas7yoshi and contributors.\nThis project is Free and Open Source Software licensed under the GPLv3.0 License."
-            + $"\nSource code is available on GitHub"
+            $"\n\nOriginal TomodachiDrawer created by Lucas7yoshi and contributors."
+            + $"\nV2 (ESP32-S3 support and fixes) by xoaninc."
+            + $"\nThis project is Free and Open Source Software licensed under the GPLv3.0 License."
+            + $"\nSource code is available on GitHub: github.com/xoaninc/TomodachiDrawer-V2"
             + $"\n\nThis program is in no way affiliated, endorsed, sponsored or created by Nintendo.";
-        _ = ShowMessageAsync("About TomodachiDrawer", message);
+        _ = ShowMessageAsync("About TomodachiDrawer V2", message);
     }
 
     private void MenuExit_Click(object? sender, RoutedEventArgs e)

@@ -531,13 +531,10 @@ public partial class MainWindow : Window
             _ = ShowMessageAsync(
                 "Done",
                 "ESP32-S3 base firmware flashed!\n\n"
-                    + "The board is STILL in download mode, so do NOT press RESET yet:\n"
-                    + "1. Load your image and choose your Switch version.\n"
-                    + "2. Press \"Export To ESP32!\" right now (no reset needed in between).\n"
-                    + "3. Then unplug and connect to the Switch (or tap RESET to test on the LED).\n\n"
-                    + "Note: once you press RESET the firmware runs as the controller, the serial\n"
-                    + "port disappears, and flashing is disabled until you re-enter download mode\n"
-                    + "(hold BOOT, tap RESET, release BOOT)."
+                    + "Do NOT press RESET now — the board is still in download mode, ready to flash your drawing.\n\n"
+                    + "Next: load your image, choose your Switch version, and press \"Export To ESP32!\".\n\n"
+                    + "(If you reset now the firmware starts running as the controller and the serial port "
+                    + "disappears, so you'd have to re-enter download mode to flash again.)"
             );
         }
     }
@@ -597,10 +594,12 @@ public partial class MainWindow : Window
             _ = ShowMessageAsync(
                 "Done",
                 "Drawing data flashed to the ESP32-S3!\n\n"
-                    + "1. Unplug it from the PC.\n"
-                    + "2. Plug it into the Switch using the port labelled USB on the DevKitC-1 (not UART).\n"
-                    + "3. Make sure \"Wired Pro Controller Communication\" is enabled in the Switch settings,\n"
-                    + "   with Palette House open, pen at the top-left, zoomed out, top colour black."
+                    + "Now RESET to start it (this is the moment to reset):\n"
+                    + "1. Unplug it from the PC and plug the port labelled USB on the DevKitC-1 (not UART) "
+                    + "into your Switch — connecting power boots it and it starts drawing automatically.\n"
+                    + "   (Or tap RESET on the board to run it right now, e.g. to check the LED.)\n\n"
+                    + "2. On the Switch: enable \"Wired Pro Controller Communication\", open Palette House "
+                    + "(advanced UI), cursor at the top-left, zoomed out, top colour black."
             );
         }
     }

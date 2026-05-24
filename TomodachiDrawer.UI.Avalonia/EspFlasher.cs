@@ -6,7 +6,6 @@ using System.IO.Ports;
 using EspDotNet;
 using EspDotNet.Communication;
 using EspDotNet.Loaders;
-using EspDotNet.Loaders.SoftLoader;
 using EspDotNet.Tools;
 using EspDotNet.Tools.Firmware;
 
@@ -63,9 +62,12 @@ internal static class EspFlasher
                     $"Expected an ESP32-S3 on {serialPort} but detected {chip}. " +
                     "Make sure the board is in download mode (hold BOOT, tap RESET).");
 
-            // Run the flasher stub so we can use the faster compressed upload path.
-            SoftLoader soft = await toolbox.StartSoftloaderAsync(comm, loader, chip, ct);
-            IUploadTool tool = toolbox.CreateUploadFlashDeflatedTool(soft, chip);
+            // Plain (uncompressed) ROM-bootloader flash. The compressed path
+            // (softloader + CreateUploadFlashDeflatedTool) was observed to
+            // truncate a ~290KB write, leaving the app partition unbootable
+            // ("invalid segment length 0xffffffff"), so we use the reliable
+            // uncompressed path even though it is a little slower.
+            IUploadTool tool = toolbox.CreateUploadFlashTool(loader, chip);
 
             var firmware = new FirmwareProvider(
                 entryPoint: 0,

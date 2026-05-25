@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
-    <Version>0.2.0</Version>
+    <Version>0.2.1</Version>
     <!-- Ship as "TomodachiDrawer V2". The OS process / exe is the (space-free) assembly name
          TomodachiDrawerV2 (a space would be an invalid avares:// URI authority); the human-facing
          product/title carries the space. -->
@@ -60,7 +60,6 @@
     <UseAppHost>true</UseAppHost>
     <PublishSingleFile>false</PublishSingleFile>
     <IncludeNativeLibrariesForSelfExtract>false</IncludeNativeLibrariesForSelfExtract>
-	<PublishTrimmed>true</PublishTrimmed>
   </PropertyGroup>
   <Target Name="BundleMacOS" AfterTargets="Publish" Condition="'$(BundleMacOSApp)' == 'true' And $(RuntimeIdentifier.StartsWith('osx'))">
     <PropertyGroup>

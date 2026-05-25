@@ -24,16 +24,26 @@ namespace TomodachiDrawer.Core
         private readonly Action<string> _log;
         private readonly SwitchVersion _switchVersion;
 
+        /// <summary>
+        /// When true, the (independent) per-layer/per-phase TSP solves are computed in parallel
+        /// across CPU cores BEFORE the (serial) input emission, instead of solving inline. The
+        /// emission logic is unchanged; only the source of each route differs. Default false
+        /// (serial, byte-identical to the original) — production (Estimate/Export) opts in.
+        /// </summary>
+        private readonly bool _parallelSolves;
+
         public CanvasDrawer(
             ISwitchOutput outputSink,
             SwitchVersion switchVersion,
-            Action<string>? logger = null
+            Action<string>? logger = null,
+            bool parallelSolves = false
         )
         {
             _realOutput = outputSink;
             _palette = new(outputSink);
             _toolbar = new(outputSink);
             _log = logger ?? Console.WriteLine;
+            _parallelSolves = parallelSolves;
 
             if (switchVersion == SwitchVersion.None)
                 throw new ArgumentOutOfRangeException(
@@ -195,6 +205,11 @@ namespace TomodachiDrawer.Core
                 }
             }
 
+            // PARALLEL PRE-SOLVE: with all layers/phases now fixed, solve every (independent) TSP
+            // concurrently before the serial emission. Null when not enabled → emission solves
+            // inline as before. See BuildPreRoutes.
+            var preRoutes = _parallelSolves ? BuildPreRoutes(layers, settings) : null;
+
             double totalInLayerTime = 0.0;
 
             var totalLayers = layers.Count;
@@ -225,8 +240,18 @@ namespace TomodachiDrawer.Core
                             tspTime = 1.5f;
                         else if (pointCount > 100)
                             tspTime = 1.0f;
-                        var optimizedRoute = PerformTSP(dumbRoute, tspTime); // half a sec per stamp size per colour is prob reasonable?
-                        optimizedRoute ??= dumbRoute;
+                        List<CanvasPoint> optimizedRoute;
+                        if (preRoutes != null)
+                        {
+                            optimizedRoute = OrientFromCursor(
+                                preRoutes[(layerNumber, RoutingPhaseKind.Stamp, brushSize)]
+                            );
+                        }
+                        else
+                        {
+                            var tspResult = PerformTSP(dumbRoute, tspTime, out _); // half a sec per stamp size per colour is prob reasonable?
+                            optimizedRoute = tspResult ?? dumbRoute;
+                        }
 
                         foreach (var point in optimizedRoute)
                         {
@@ -261,13 +286,17 @@ namespace TomodachiDrawer.Core
                     _cursorY = savedY;
 
                     var tspSink = new TimingSink();
-                    FineDetailTsp(tspSink, l, settings.TSPTimeLimit);
+                    FineDetailTsp(
+                        tspSink,
+                        l,
+                        settings.TSPTimeLimit,
+                        preRoutes != null
+                            ? preRoutes[(layerNumber, RoutingPhaseKind.FineDetail, 1)]
+                            : null
+                    );
 
                     int afterTspX = _cursorX;
                     int afterTspY = _cursorY;
-
-                    //_cursorX = savedX;
-                    //_cursorY = savedY;
 
                     bool tspHasSolution = tspSink.TotalMilliseconds > 0;
                     bool usedSnake =
@@ -286,6 +315,7 @@ namespace TomodachiDrawer.Core
                         _cursorX = afterTspX;
                         _cursorY = afterTspY;
                     }
+
                     string tspPart = tspHasSolution
                         ? $"{tspSink.TotalTime.TotalSeconds:F3}s"
                         : "no solution";
@@ -299,16 +329,30 @@ namespace TomodachiDrawer.Core
                 {
                     _log($"\tPerforming bucket fills: {l.BucketClicks.Count} clicks");
 
+                    int bucketCount = l.BucketClicks.Count;
                     _toolbar.SelectBucket();
                     // tsp solve the points
                     var bucketClickRouteTimeout = 0.25f;
-                    if (l.BucketClicks.Count > 50)
+                    if (bucketCount > 50)
                         bucketClickRouteTimeout = 0.5f;
-                    var optimizedBucketClickRoute = PerformTSP(
-                        l.BucketClicks.ToList(),
-                        bucketClickRouteTimeout
-                    );
-                    foreach (var click in optimizedBucketClickRoute ?? l.BucketClicks.ToList()) // in case somehow it fails
+                    List<CanvasPoint> optimizedBucketClickRoute;
+                    if (preRoutes != null)
+                    {
+                        optimizedBucketClickRoute = OrientFromCursor(
+                            preRoutes[(layerNumber, RoutingPhaseKind.BucketClicks, 1)]
+                        );
+                    }
+                    else
+                    {
+                        var bucketTspResult = PerformTSP(
+                            l.BucketClicks.ToList(),
+                            bucketClickRouteTimeout,
+                            out _
+                        );
+                        optimizedBucketClickRoute = bucketTspResult ?? l.BucketClicks.ToList(); // in case somehow it fails
+                    }
+
+                    foreach (var click in optimizedBucketClickRoute)
                     {
                         NavigateTo(_realOutput, click);
                         _realOutput.Tap(Button.A);
@@ -735,19 +779,30 @@ namespace TomodachiDrawer.Core
         // TSP with Google.OrTools nuget package
         // https://developers.google.com/optimization/routing/tsp#c_1
         // It is possible for it to NOT find a solution.
-        private void FineDetailTsp(ISwitchOutput output, ColourLayer l, float timeLimitSeconds)
+        private void FineDetailTsp(
+            ISwitchOutput output,
+            ColourLayer l,
+            float timeLimitSeconds,
+            IReadOnlyList<CanvasPoint>? precomputed = null
+        )
         {
             // Find start point, this logic will need adjusted in time
             // when we eventually reorder layers to be the most optimal.
 
             var pointsList = l.FineDetailPoints.ToList();
 
-            var optimizedRoute = PerformTSP(pointsList, timeLimitSeconds);
-
-            if (optimizedRoute == null)
+            List<CanvasPoint> optimizedRoute;
+            if (precomputed != null)
             {
-                _log($"\tTSP timed out. Performing naive routing for TSP instead...");
-                optimizedRoute = FineDetailRoughTSP(pointsList);
+                // Parallel pre-solve already produced the route; orient it from the live cursor.
+                optimizedRoute = OrientFromCursor(precomputed);
+            }
+            else
+            {
+                var solved = PerformTSP(pointsList, timeLimitSeconds, out _);
+                if (solved == null)
+                    _log($"\tTSP timed out. Performing naive routing for TSP instead...");
+                optimizedRoute = solved ?? FineDetailRoughTSP(pointsList);
             }
 
             // Navigate through the optimised route.
@@ -864,8 +919,19 @@ namespace TomodachiDrawer.Core
             return ordered;
         }
 
-        private List<CanvasPoint>? PerformTSP(List<CanvasPoint> inputPoints, float timeLimitSeconds)
+        private List<CanvasPoint>? PerformTSP(
+            List<CanvasPoint> inputPoints,
+            float timeLimitSeconds,
+            out double solveMs
+        )
         {
+            // Defensive: callers currently guard against empty input, but never crash here.
+            if (inputPoints.Count == 0)
+            {
+                solveMs = 0;
+                return new List<CanvasPoint>();
+            }
+
             var points = inputPoints.ToArray();
             var closestPointIndex = 0;
             var closestPointDist = MeasureDistanceToFromCurrent(points[0].X, points[0].Y);
@@ -922,6 +988,7 @@ namespace TomodachiDrawer.Core
             var sw = Stopwatch.StartNew();
             var solution = routing.SolveWithParameters(searchParameters);
             sw.Stop();
+            solveMs = sw.Elapsed.TotalMilliseconds;
 
             if (solution is null)
                 return null;
@@ -935,6 +1002,107 @@ namespace TomodachiDrawer.Core
             }
 
             return optimizedRoute;
+        }
+
+        /// <summary>
+        /// Solves every (independent) per-layer/per-phase TSP concurrently — this is the expensive
+        /// work — before the serial emission. Keyed by (1-based layer number, phase kind, brush
+        /// size), matching the keys the emission loop looks up. Each value is the solved route, or
+        /// the input order if the solver returned nothing, so every key maps to a route covering
+        /// all of its points. Pure: only calls <see cref="RouteSolver"/> (no cursor/palette state).
+        /// </summary>
+        private Dictionary<(int, RoutingPhaseKind, int), List<CanvasPoint>> BuildPreRoutes(
+            List<ColourLayer> layers,
+            DrawImageSettings settings
+        )
+        {
+            var keys = new List<(int, RoutingPhaseKind, int)>();
+            var pts = new List<List<CanvasPoint>>();
+            var times = new List<float>();
+
+            // MUST iterate layers in the same order as the emission loop so the 1-based layerNumber
+            // keys line up. Stamp brush sizes come only from LargeBrushSizes (3..27, never 1), so
+            // (layer, Stamp, size) never collides with (layer, FineDetail/BucketClicks, 1).
+            int layerNumber = 0;
+            foreach (var l in layers)
+            {
+                layerNumber++;
+                if (l.StampsBySize != null)
+                {
+                    foreach (var sbs in l.StampsBySize)
+                    {
+                        if (sbs.Value.Count == 0)
+                            continue;
+                        int count = sbs.Value.Count;
+                        float t = count > 200 ? 1.5f : (count > 100 ? 1.0f : 0.5f);
+                        keys.Add((layerNumber, RoutingPhaseKind.Stamp, sbs.Key));
+                        pts.Add(new List<CanvasPoint>(sbs.Value));
+                        times.Add(t);
+                    }
+                }
+                if (l.FineDetailPoints.Count > 0)
+                {
+                    keys.Add((layerNumber, RoutingPhaseKind.FineDetail, 1));
+                    pts.Add(l.FineDetailPoints.ToList());
+                    times.Add(settings.TSPTimeLimit);
+                }
+                if (l.BucketClicks.Count > 0)
+                {
+                    int count = l.BucketClicks.Count;
+                    float t = count > 50 ? 0.5f : 0.25f;
+                    keys.Add((layerNumber, RoutingPhaseKind.BucketClicks, 1));
+                    pts.Add(l.BucketClicks.ToList());
+                    times.Add(t);
+                }
+            }
+
+            // ~80% of logical threads — leaves the machine responsive while solving.
+            int threadCount = Math.Max(1, (int)Math.Round(Environment.ProcessorCount * 0.8));
+            _log($"Pre-solving {keys.Count} routes across {threadCount} threads...");
+
+            var solved = new List<CanvasPoint>[keys.Count];
+            Parallel.For(
+                0,
+                keys.Count,
+                new ParallelOptions { MaxDegreeOfParallelism = threadCount },
+                i =>
+                {
+                    try
+                    {
+                        var route = RouteSolver.Solve(pts[i], times[i], out _);
+                        solved[i] = route.Count > 0 ? route : pts[i]; // fall back to input order
+                    }
+                    catch
+                    {
+                        // On any solver error, fall back to input order (the serial path tolerates
+                        // null the same way). Never let one job abort the whole generation.
+                        solved[i] = pts[i];
+                    }
+                }
+            );
+
+            var dict = new Dictionary<(int, RoutingPhaseKind, int), List<CanvasPoint>>(keys.Count);
+            for (int i = 0; i < keys.Count; i++)
+                dict[keys[i]] = solved[i];
+            return dict;
+        }
+
+        /// <summary>
+        /// Returns the route traversed from whichever endpoint is nearest the live cursor (reversing
+        /// if needed) so the initial NavigateTo stays short. Used for parallel pre-solved routes,
+        /// whose depot was fixed at index 0 (not cursor-nearest). Always returns a fresh list, so
+        /// the cached route is never mutated.
+        /// </summary>
+        private List<CanvasPoint> OrientFromCursor(IReadOnlyList<CanvasPoint> route)
+        {
+            var result = new List<CanvasPoint>(route);
+            if (result.Count < 2)
+                return result;
+            int dStart = MeasureDistanceToFromCurrent(route[0].X, route[0].Y);
+            int dEnd = MeasureDistanceToFromCurrent(route[^1].X, route[^1].Y);
+            if (dEnd < dStart)
+                result.Reverse();
+            return result;
         }
 
         private void NavigateTo(ISwitchOutput output, CanvasPoint p) =>

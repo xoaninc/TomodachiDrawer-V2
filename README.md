@@ -24,7 +24,15 @@ See #12 , unfortunately it seems that the Switch 1 is prone to desyncing randoml
 
 The program splits images into layers matched to colours in the game, and generates optimized routes for the pen to follow to draw your image.
 
-It has a crossplatform Avalonia UI desktop app that supports flashing directly to a RP2040-Zero which can then be plugged into the USB port of a Switch or Switch 2 where it will begin to draw.
+It has a crossplatform Avalonia UI desktop app that flashes directly to an **RP2040** (e.g. RP2040-Zero) **or an ESP32-S3**, which is then plugged into the USB port of a Switch or Switch 2 where it begins to draw.
+
+### What's new in V2
+
+- **ESP32-S3 support** alongside the original RP2040 — use a board you may already own (see below).
+- **HID report-descriptor fix** — the controller now declares the full 8-byte input report (the
+  original declared 7 while sending 8; the Switch tolerated it but strict USB hosts dropped reports).
+- **Parallel route generation** — the per-layer/per-phase TSP solves run across CPU cores, making
+  route generation ~6-7× faster on a multi-core machine, with byte-identical output to the original.
 
 ## Hardware Compatibility
 This was designed for an RP2040-Zero as it was one of the cheapest options, however any RP2040 based board *should* be compatible, with support for the LED on the standard Raspberry Pi Pico too.
@@ -79,21 +87,22 @@ An addendum video covering the changes since that was made is available here:
 [Addendum Tutorial](https://youtu.be/9rVLea1-nlY)
 
 ### Downloads
-Downloads are available in the releases, they come in a few forms
+V2 builds are published on the V2 repo's releases page:
 
-[Releases](https://github.com/Lucas7yoshi/TomodachiDrawer/releases)
+[V2 Releases](https://github.com/xoaninc/TomodachiDrawer-V2/releases)
 
-- TomodachiDrawer.UI.Avalonia.#.#.#.platform.zip
-platform can be win64 for windows, osx-arm64 for Mac on ARM cpus, osx64 for Mac on x64 cpus, and linux64 and linuxarm64 for the same on linux.
-Download the one that is right for your computer, for mac users with any recent macbook arm64 should work.
+Each release has one archive per platform (`win-x64`, `osx-x64`, `osx-arm64`, `linux-x64`,
+`linux-arm64`). Download the one for your computer — for any recent ARM MacBook use `osx-arm64`.
+The app inside is named **TomodachiDrawer V2** (`TomodachiDrawerV2.exe` on Windows,
+`TomodachiDrawer V2.app` on macOS).
 
-For Linux and Mac users, you may need to run chmod +x binaryNameHere or go into your settings to allow it.
+For Linux and Mac users, you may need to `chmod +x` the binary or allow it in your security settings.
 
 ### Or briefly, in text:
 
-1. Download the Desktop app here, for your platform: https://github.com/Lucas7yoshi/TomodachiDrawer/releases
-3. Extract the zip folder
-4. Run TomodachiDrawer.UI.Avalonia.[YourPlatform].exe (or similar for your platform)
+1. Download the Desktop app for your platform from the [V2 Releases](https://github.com/xoaninc/TomodachiDrawer-V2/releases)
+3. Extract the archive
+4. Run **TomodachiDrawer V2** (`TomodachiDrawerV2.exe` on Windows, the `.app` on macOS, or the binary on Linux)
 5. Plug in your RP2040-Zero (or Raspberry Pi Pico) to your PC while holding the boot button, or while connected hold BOOT and press reset while still holding boot.
 6. The program should recognize it.
 7. Press "Flash Base Firmware", this will install the code that handles sending the inputs.
@@ -112,11 +121,24 @@ If it does not detect it, you can still drag-and-drop the .uf2 included with the
 
 This project is a recreation of a mess of AI coded nonsense that was unmaintainable by me and too fixated to my setup. Please refrain from using AI irresponsibily if you wish to contribute. As I encountered several times, even just leaning on it to think of a general idea on how to approach a problem can send you down a overly complicated rabbit hole that you really dont need to, so be smart.
 
-This project is split into the TomodachiDrawer.Core which houses all the main pathing logic, the output sinks, and colour palette info, as well as the UI's (which there is just one, the UI.Windows in WinForms)
+The solution (`TomodachiDrawer.slnx`) is split into:
+
+- **TomodachiDrawer.Core** — all platform-agnostic logic: image processing/quantization, the TSP
+  pen-route solving (Google OR-Tools), the colour palette, and the output sinks. The `.tdld` binary
+  format is defined here in `OutputSinks/FileControllerSink.cs`.
+- **TomodachiDrawer.UI.Avalonia** — the one desktop UI, cross-platform **Avalonia** (not WinForms).
+  Hosts both flashers: `UF2Flasher` (RP2040) and `EspFlasher` (ESP32-S3). This is the app that ships.
+- **TomodachiDrawer.Firmware** — RP2040 firmware (Pico SDK + TinyUSB + PIO), C.
+- **TomodachiDrawer.Firmware.ESP32** — ESP32-S3 firmware (ESP-IDF), the V2 addition.
+- **TomodachiDrawer.SerialPlayer** — dev-only host for piping `.tdld` over UART.
+- **TomodachiDrawer.DebugTools** — Debug-config-only helpers (e.g. a virtual gamepad);
+  referenced by the UI **only in Debug builds**, so it never ships in a release.
 
 The binary format used is .tdld, and is custom made by me for the purposes of controller microcontrollers. Technically speaking, this format is not at all bound to Tomodachi Life as it is just a generic way to represent inputs and delays in a compact form.
 
-Visual Studio 2026 is neccasary as well as the .NET 10 runtime. For the TomodachiDrawer.Firmware, please see the README.md in the folder.
+The **.NET 10 SDK** is required (any editor works — VS, VS Code, Rider, or just the CLI:
+`dotnet build TomodachiDrawer.V2`). For the firmware, see the README.md in each
+`TomodachiDrawer.Firmware*` folder.
 
 Contributions are encouraged, and if you want to make a new UI for a new platform you are more than welcome to, in fact, it would be greatly appreciated!
 
@@ -130,6 +152,8 @@ The main motivator for this license is that it requires that derivatives share t
 ## Used libraries
 This project depends on the following libraries:
 
-- SkiaSharp	(For image reading/writing)
-- Google.OrTools (for the TSP solving)
-- ImageSharp (For its WuQuantizer)
+- SkiaSharp (image reading/writing)
+- Google.OrTools (TSP route solving)
+- SixLabors.ImageSharp (Wu quantizer, used by the "Arbitrary" colour mode)
+- Avalonia (the cross-platform desktop UI)
+- ESPTool (native C# flasher for the ESP32-S3, V2)

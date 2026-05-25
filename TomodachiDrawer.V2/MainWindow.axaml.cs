@@ -47,6 +47,7 @@ public partial class MainWindow : Window
     private byte[]? _cachedTdld;
     private TimeSpan _cachedTime;
     private string? _cachedFingerprint;
+    private readonly object _cacheLock = new(); // guards the three _cached* fields above
 
     //private SwitchVersion _selectedSwitchVersion = SwitchVersion.None;
     //private int _selectedThemeIndex = 0; // 0 is System.
@@ -259,7 +260,6 @@ public partial class MainWindow : Window
         };
         MenuDebugOpenVirtualGamepadController.Click += MenuDebugOpenVirtualGamepadController_Click;
         debugMenuItem.Items.Add(MenuDebugOpenVirtualGamepadController);
-
     }
 #endif
 
@@ -854,26 +854,37 @@ public partial class MainWindow : Window
         ExportRP2040Button.IsEnabled = false;
         TimeSpan totalTime = TimeSpan.MaxValue;
 
-        await Task.Run(async () =>
+        // try/finally so a failure during generation/flash never leaves BusyExporting stuck true
+        // (which would lock every export/estimate button for the rest of the session).
+        try
         {
-            using var img = imageSnapshot;
-            var (tdldBytes, time) = await GetTdldAsync(img, drawSettings, _currentSettings.SelectedSwitchVersion);
-            totalTime = time;
-
-            var uf2Bytes = UF2Flasher.BuildTDLDUF2(tdldBytes);
-            var drivePath = UF2Flasher.FindRP2040Drive();
-
-            if (uf2Bytes != null && uf2Bytes.Length > 0 && drivePath != null && CanAccessRP2040Drive(drivePath))
+            await Task.Run(async () =>
             {
-                File.WriteAllBytes(Path.Combine(drivePath, "tdld_image.uf2"), uf2Bytes);
-                AppendLog(
-                    "Wrote to RP2040 flash. Unplug the RP2040 and plug it into the switch without holding any button."
-                );
-            }
-        });
+                using var img = imageSnapshot;
+                var (tdldBytes, time) = await GetTdldAsync(img, drawSettings, _currentSettings.SelectedSwitchVersion);
+                totalTime = time;
 
-        BusyExporting = false;
-        ExportRP2040Button.IsEnabled = true;
+                var uf2Bytes = UF2Flasher.BuildTDLDUF2(tdldBytes);
+                var drivePath = UF2Flasher.FindRP2040Drive();
+
+                if (uf2Bytes != null && uf2Bytes.Length > 0 && drivePath != null && CanAccessRP2040Drive(drivePath))
+                {
+                    File.WriteAllBytes(Path.Combine(drivePath, "tdld_image.uf2"), uf2Bytes);
+                    AppendLog(
+                        "Wrote to RP2040 flash. Unplug the RP2040 and plug it into the switch without holding any button."
+                    );
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            AppendLog($"RP2040 export failed: {ex.Message}");
+        }
+        finally
+        {
+            BusyExporting = false;
+            ExportRP2040Button.IsEnabled = true;
+        }
 
         SetEstimate(totalTime);
     }
@@ -910,8 +921,14 @@ public partial class MainWindow : Window
         using var ms = new MemoryStream();
         var pixels = img.Bytes;
         ms.Write(pixels, 0, pixels.Length);
+        // Build the settings part by hand instead of JsonSerializer.Serialize(settings): the
+        // reflection-based overload is trim-unsafe (IL2026 under PublishTrimmed). Lists every field
+        // that affects the generated route so the cache still invalidates when any of them changes.
+        var q = settings.QuantizerSettings;
         var meta = System.Text.Encoding.UTF8.GetBytes(
-            $"|{img.Width}x{img.Height}|{ver}|{JsonSerializer.Serialize(settings)}"
+            $"|{img.Width}x{img.Height}|{ver}|q={q.quantizerName}|c={q.colourCount}|dith={q.useDithering}"
+                + $"|denoise={settings.DenoiserName}|tsp={settings.TSPTimeLimit}|nolb={settings.DisableLargeBrush}"
+                + $"|exp={settings.EnableExperimentalFeatures}|home={settings.HomeToTopLeft}"
         );
         ms.Write(meta, 0, meta.Length);
         ms.Position = 0;
@@ -925,10 +942,13 @@ public partial class MainWindow : Window
         SKBitmap img, DrawImageSettings settings, SwitchVersion ver)
     {
         var fingerprint = ComputeFingerprint(img, settings, ver);
-        if (fingerprint == _cachedFingerprint && _cachedTdld != null)
+        lock (_cacheLock)
         {
-            AppendLog("Reusing cached route (image and settings unchanged) — no re-generation needed.");
-            return (_cachedTdld, _cachedTime);
+            if (fingerprint == _cachedFingerprint && _cachedTdld != null)
+            {
+                AppendLog("Reusing cached route (image and settings unchanged) — no re-generation needed.");
+                return (_cachedTdld, _cachedTime);
+            }
         }
 
         var tempPath = Path.Combine(
@@ -936,7 +956,9 @@ public partial class MainWindow : Window
             $"tdld{System.Random.Shared.Next(1000000, 9999999)}.tdld"
         );
         var timingSink = new TimingSink();
-        var drawer = new CanvasDrawer(timingSink, ver, AppendLog);
+        // Production: solve the independent per-layer TSPs in parallel across CPU cores (~6-7x
+        // faster generation). The emitted .tdld is equivalent (route order differs, coverage same).
+        var drawer = new CanvasDrawer(timingSink, ver, AppendLog, parallelSolves: true);
         drawer.ConnectAndConfirmController();
         await drawer.DrawImage(img, settings);
 
@@ -946,9 +968,12 @@ public partial class MainWindow : Window
         var bytes = File.ReadAllBytes(tempPath);
         try { File.Delete(tempPath); } catch { /* best effort */ }
 
-        _cachedTdld = bytes;
-        _cachedTime = timingSink.TotalTime;
-        _cachedFingerprint = fingerprint;
+        lock (_cacheLock)
+        {
+            _cachedTdld = bytes;
+            _cachedTime = timingSink.TotalTime;
+            _cachedFingerprint = fingerprint;
+        }
         return (bytes, timingSink.TotalTime);
     }
 

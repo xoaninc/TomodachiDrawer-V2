@@ -3,7 +3,7 @@ name: .NET Build Test and Publish artifacts
 on:
   push:
     branches:
-      - master
+      - main
     tags:
       - '*.*.*'
   pull_request:
@@ -49,7 +49,7 @@ jobs:
         cache: true
         cache-dependency-path: '**/*.csproj'
     - name: Build
-      working-directory: TomodachiDrawer.UI.Avalonia
+      working-directory: TomodachiDrawer.V2
       run: |
         dotnet publish --configuration ${{ matrix.configuration }} \
           -r ${{ matrix.runtime }} \
@@ -59,8 +59,8 @@ jobs:
     - name: Upload Artifacts
       uses: actions/upload-artifact@v7
       with:
-        name: TomodachiDrawer-Avalonia-${{ matrix.runtime }}-${{ matrix.configuration }}
-        path: TomodachiDrawer.UI.Avalonia/bin/${{ matrix.configuration }}/net10.0/${{ matrix.runtime }}/publish/
+        name: TomodachiDrawer-V2-${{ matrix.runtime }}-${{ matrix.configuration }}
+        path: TomodachiDrawer.V2/bin/${{ matrix.configuration }}/net10.0/${{ matrix.runtime }}/publish/
   release:
     name: Draft release
     runs-on: ubuntu-latest
@@ -84,14 +84,15 @@ jobs:
           echo "Zipping/Tarring ${dirname}"
 
           outname="${dirname//osx/mac}"
+          outname="${outname//-Release/}"
           
           if [[ "$dirname" == *"osx"* ]]; then
             echo "Mac .tar.gz"
-            chmod +x TomodachiDrawer.app/Contents/MacOS/TomodachiDrawer.UI.Avalonia
-            tar -czvf "../../final-packages/${outname}-${{ github.ref_name }}.tar.gz" TomodachiDrawer.app TomodachiDrawer.Firmware.uf2 README.txt
+            chmod +x "TomodachiDrawer V2.app/Contents/MacOS/TomodachiDrawerV2"
+            tar -czvf "../../final-packages/${outname}-${{ github.ref_name }}.tar.gz" "TomodachiDrawer V2.app" TomodachiDrawer.Firmware.uf2 README.txt
           elif [[ "$dirname" == *"linux"* ]]; then
             echo "Linux .tar.gz"
-            chmod +x TomodachiDrawer.UI.Avalonia
+            chmod +x TomodachiDrawerV2
             tar -czvf "../../final-packages/${outname}-${{ github.ref_name }}.tar.gz" *
           else
             echo "Windows .zip"

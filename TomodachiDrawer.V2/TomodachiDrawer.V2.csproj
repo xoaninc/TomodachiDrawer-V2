@@ -6,7 +6,15 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
+    <!-- Ship as "TomodachiDrawer V2". The OS process / exe is the (space-free) assembly name
+         TomodachiDrawerV2 (a space would be an invalid avares:// URI authority); the human-facing
+         product/title carries the space. -->
+    <AssemblyName>TomodachiDrawerV2</AssemblyName>
+    <!-- Folder/project renamed to TomodachiDrawer.V2, but the C# namespace stays the original. -->
+    <RootNamespace>TomodachiDrawer.UI.Avalonia</RootNamespace>
+    <Product>TomodachiDrawer V2</Product>
+    <AssemblyTitle>TomodachiDrawer V2</AssemblyTitle>
     <ApplicationIcon>TomodachiDrawer.ico</ApplicationIcon>
 	<!-- suppress warning from Google.OrTools from trimming since we are rooting it. -->
     <NoWarn>$(NoWarn);IL2104</NoWarn>
@@ -56,7 +64,7 @@
   </PropertyGroup>
   <Target Name="BundleMacOS" AfterTargets="Publish" Condition="'$(BundleMacOSApp)' == 'true' And $(RuntimeIdentifier.StartsWith('osx'))">
     <PropertyGroup>
-      <AppBundleDir>$([System.IO.Path]::Combine('$(PublishDir)', 'TomodachiDrawer.app'))</AppBundleDir>
+      <AppBundleDir>$([System.IO.Path]::Combine('$(PublishDir)', 'TomodachiDrawer V2.app'))</AppBundleDir>
       <ContentsDir>$([System.IO.Path]::Combine('$(AppBundleDir)', 'Contents'))</ContentsDir>
       <MacOsDir>$([System.IO.Path]::Combine('$(ContentsDir)', 'MacOS'))</MacOsDir>
       <ResourcesDir>$([System.IO.Path]::Combine('$(ContentsDir)', 'Resources'))</ResourcesDir>

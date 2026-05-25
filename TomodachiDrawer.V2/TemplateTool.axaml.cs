@@ -184,7 +184,7 @@ public partial class TemplateTool : Window
 
     private static SKBitmap MakeBetterMask(SKBitmap mask)
     {
-        using var nodrawStream = AssetLoader.Open(new Uri("avares://TomodachiDrawer.UI.Avalonia/Assets/nodraw.png"));
+        using var nodrawStream = AssetLoader.Open(new Uri("avares://TomodachiDrawerV2/Assets/nodraw.png"));
         using var nodraw = SKBitmap.Decode(nodrawStream);
         var tinted = mask.Copy();
         for (int y = 0; y < 256; y++)

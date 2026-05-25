@@ -2,7 +2,7 @@
 		xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 		x:Class="TomodachiDrawer.UI.Avalonia.MainWindow"
 		Icon="/Assets/Icon.png"
-		Title="Tomodachi Drawer V2"
+		Title="TomodachiDrawer V2"
 		Width="1100" Height="700"
 		MinWidth="1000" MinHeight="600">
 
@@ -349,7 +349,7 @@
 					</Grid>
 					<Image x:Name="PreviewImage"
 						   Stretch="Uniform"
-						   Source="avares://TomodachiDrawer.UI.Avalonia/Assets/NoImagePlaceholder.png"
+						   Source="avares://TomodachiDrawerV2/Assets/NoImagePlaceholder.png"
 						   RenderOptions.BitmapInterpolationMode="None" />
 				</DockPanel>
 			</Border>

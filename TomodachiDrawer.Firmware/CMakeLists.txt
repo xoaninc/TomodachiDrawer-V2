@@ -30,7 +30,17 @@ project(TomodachiDrawer.Firmware C CXX ASM)
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
 
+if(PICO_PLATFORM STREQUAL "rp2350" OR PICO_PLATFORM STREQUAL "rp2350-arm-s" OR PICO_PLATFORM STREQUAL "rp2350-riscv")
+    set(FIRMWARE_BOARD_SUFFIX "rp2350")
+else()
+    set(FIRMWARE_BOARD_SUFFIX "rp2040")
+endif()
+
 add_executable(TomodachiDrawer.Firmware TomodachiDrawer.Firmware.c usb_descriptors.c)
+
+set_target_properties(TomodachiDrawer.Firmware PROPERTIES
+    OUTPUT_NAME "TomodachiDrawer.Firmware.${FIRMWARE_BOARD_SUFFIX}"
+)
 
 pico_generate_pio_header(TomodachiDrawer.Firmware ${CMAKE_CURRENT_LIST_DIR}/ws2812.pio)
 

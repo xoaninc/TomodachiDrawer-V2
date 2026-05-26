@@ -121,8 +121,14 @@ static void neopixel_init(void) {
 
 // "blocking" is interesting but doesnt seem to cause any trouble...
 static void neopixel_set_rgb(uint8_t r, uint8_t g, uint8_t b) {
-    uint32_t grb = ((uint32_t)g << 24) | ((uint32_t)r << 16) | ((uint32_t)b << 8);
-    pio_sm_put_blocking(NEOPIXEL_PIO, NEOPIXEL_SM, grb);
+    uint32_t colour_data;
+    // For some reason the RP2350-Zero neopixel expects RGB instead of GRB like the RP2040-Zero
+#if defined(PICO_RP2350)
+    colour_data = ((uint32_t)r << 24) | ((uint32_t)g << 16) | ((uint32_t)b << 8);
+#else
+    colour_data = ((uint32_t)g << 24) | ((uint32_t)r << 16) | ((uint32_t)b << 8);
+#endif
+    pio_sm_put_blocking(NEOPIXEL_PIO, NEOPIXEL_SM, colour_data);
 }
 
 static void boringpixel_init(void) {

@@ -34,8 +34,6 @@ namespace TomodachiDrawer.UI.Avalonia;
 
 public partial class MainWindow : Window
 {
-    private const string firmwareFileName = "TomodachiDrawer.Firmware.uf2";
-
     private string _currentImagePath = string.Empty;
     private SKBitmap? _currentImage;
     private readonly CancellationTokenSource _cts = new();
@@ -91,7 +89,7 @@ public partial class MainWindow : Window
         this.Title = $"TomodachiDrawer V2 - {GetVersionString(false)}";
 #endif
 
-        StartRP2040Polling();
+        StartPicoPolling();
         StartEsp32Polling();
         if (CheckForUpdatesCheckBox.IsChecked)
             _ = PerformAsyncUpdateCheck();
@@ -364,62 +362,76 @@ public partial class MainWindow : Window
 
     // ── RP2040 polling ────────────────────────────────────────────────
 
-    private void StartRP2040Polling()
+    private void StartPicoPolling()
     {
         _ = Task.Run(async () =>
         {
-            bool lastState = false;
+            bool lastRp2040 = false;
+            bool lastRp2350 = false;
             while (!_cts.Token.IsCancellationRequested)
             {
-                var path = UF2Flasher.FindRP2040Drive();
-                await Dispatcher.UIThread.InvokeAsync(() =>
-                {
-                    bool hasImage = _currentImage != null;
-
-                    // ExportUF2 and Estimate only need an image — no RP2040 required
-                    ExportUF2Button.IsEnabled = hasImage;
-                    EstimateButton.IsEnabled = hasImage && !BusyExporting;
-
-                    if (path != null)
-                    {
-                        RP2040StatusLabel.Text = $"RP2040 found: {path}";
-                        RP2040StatusLabel.Foreground = Brushes.Green;
-
-                        FlashFirmwareButton.IsEnabled = !BusyExporting;
-                        ExportRP2040Button.IsEnabled = hasImage && !BusyExporting;
-                        ExportUF2Button.IsEnabled = hasImage && !BusyExporting;
-                        if (!lastState)
-                        {
-                            AppendLog($"RP2040 connected @ {path}");
-                            lastState = true;
-                        }
-                    }
-                    else
-                    {
-                        RP2040StatusLabel.Text = "RP2040 not found";
-                        RP2040StatusLabel.Foreground = Brushes.Red;
-
-                        FlashFirmwareButton.IsEnabled = false;
-                        ExportRP2040Button.IsEnabled = false;
-                        ExportUF2Button.IsEnabled = hasImage && !BusyExporting;
-                        if (lastState)
-                        {
-                            AppendLog("RP2040 disconnected...");
-                            lastState = false;
-                        }
-                    }
-                });
-
                 try
                 {
+                    var rp2040Path = UF2Flasher.FindRP2040Drive();
+                    var rp2350Path = UF2Flasher.FindRP2350Drive();
+                    await Dispatcher.UIThread.InvokeAsync(() =>
+                    {
+                        bool hasImage = _currentImage != null;
+
+                        // Estimate only needs an image — no device required
+                        EstimateButton.IsEnabled = hasImage && !BusyExporting;
+
+                        lastRp2040 = UpdateChipUI(RPChipType.RP2040, rp2040Path, hasImage, lastRp2040);
+                        lastRp2350 = UpdateChipUI(RPChipType.RP2350, rp2350Path, hasImage, lastRp2350);
+                    });
+
                     await Task.Delay(1000, _cts.Token);
                 }
                 catch (System.OperationCanceledException)
                 {
                     break;
                 }
+                catch
+                {
+                    // Transient device-enumeration / UI error — keep polling rather than letting
+                    // the loop die and freezing device detection for the rest of the session.
+                }
             }
         });
+    }
+
+    // Refreshes one Pico tab's status label + buttons. Returns the new "connected" state so the
+    // caller can detect connect/disconnect transitions for logging.
+    private bool UpdateChipUI(RPChipType chip, string? path, bool hasImage, bool last)
+    {
+        var (statusLabel, flashButton, exportButton, exportUf2Button, chipName) =
+            chip == RPChipType.RP2350
+                ? (RP2350StatusLabel, RP2350FlashButton, RP2350ExportButton, RP2350ExportUF2Button, "RP2350")
+                : (RP2040StatusLabel, RP2040FlashButton, RP2040ExportButton, RP2040ExportUF2Button, "RP2040");
+
+        // Export-to-.UF2 only needs an image — no device required.
+        exportUf2Button.IsEnabled = hasImage && !BusyExporting;
+
+        if (path != null)
+        {
+            statusLabel.Text = $"{chipName} found: {path}";
+            statusLabel.Foreground = Brushes.Green;
+            flashButton.IsEnabled = !BusyExporting;
+            exportButton.IsEnabled = hasImage && !BusyExporting;
+            if (!last)
+                AppendLog($"{chipName} connected @ {path}");
+            return true;
+        }
+        else
+        {
+            statusLabel.Text = $"{chipName} not found";
+            statusLabel.Foreground = Brushes.Red;
+            flashButton.IsEnabled = false;
+            exportButton.IsEnabled = false;
+            if (last)
+                AppendLog($"{chipName} disconnected...");
+            return false;
+        }
     }
 
     // ── ESP32-S3 ──────────────────────────────────────────────────────
@@ -648,7 +660,8 @@ public partial class MainWindow : Window
         _currentImagePath = displayName; // kept for log messages / ImagePathBox
 
         ImagePathBox.Text = displayName;
-        ExportUF2Button.IsEnabled = true;
+        RP2040ExportUF2Button.IsEnabled = true;
+        RP2350ExportUF2Button.IsEnabled = true;
 
         if (img.Width == 256 && img.Height == 256)
         {
@@ -831,7 +844,7 @@ public partial class MainWindow : Window
         return new QuantizerSettings(quantizerName, default, default);
     }
 
-    private async void ExportRP2040Button_Click(object? sender, RoutedEventArgs e)
+    private async void ExportToDeviceButton_Click(object? sender, RoutedEventArgs e)
     {
         if (_currentImage == null)
             return;
@@ -847,11 +860,14 @@ public partial class MainWindow : Window
             return;
         }
 
+        var chip = sender == RP2350ExportButton ? RPChipType.RP2350 : RPChipType.RP2040;
+        var exportButton = chip == RPChipType.RP2350 ? RP2350ExportButton : RP2040ExportButton;
+
         var imageSnapshot = _currentImage!.Copy();
         var drawSettings = GetDrawImageSettings();
 
         BusyExporting = true;
-        ExportRP2040Button.IsEnabled = false;
+        exportButton.IsEnabled = false;
         TimeSpan totalTime = TimeSpan.MaxValue;
 
         // try/finally so a failure during generation/flash never leaves BusyExporting stuck true
@@ -864,26 +880,26 @@ public partial class MainWindow : Window
                 var (tdldBytes, time) = await GetTdldAsync(img, drawSettings, _currentSettings.SelectedSwitchVersion);
                 totalTime = time;
 
-                var uf2Bytes = UF2Flasher.BuildTDLDUF2(tdldBytes);
-                var drivePath = UF2Flasher.FindRP2040Drive();
+                var uf2Bytes = UF2Flasher.BuildTDLDUF2(tdldBytes, chip);
+                var drivePath = UF2Flasher.FindDriveForChip(chip);
 
                 if (uf2Bytes != null && uf2Bytes.Length > 0 && drivePath != null && CanAccessRP2040Drive(drivePath))
                 {
                     File.WriteAllBytes(Path.Combine(drivePath, "tdld_image.uf2"), uf2Bytes);
                     AppendLog(
-                        "Wrote to RP2040 flash. Unplug the RP2040 and plug it into the switch without holding any button."
+                        $"Wrote to {chip} flash. Unplug the {chip} and plug it into the switch without holding any button."
                     );
                 }
             });
         }
         catch (Exception ex)
         {
-            AppendLog($"RP2040 export failed: {ex.Message}");
+            AppendLog($"{chip} export failed: {ex.Message}");
         }
         finally
         {
             BusyExporting = false;
-            ExportRP2040Button.IsEnabled = true;
+            exportButton.IsEnabled = true;
         }
 
         SetEstimate(totalTime);
@@ -1060,44 +1076,62 @@ public partial class MainWindow : Window
         if (outputPath == null)
             return;
 
+        var chip = sender == RP2350ExportUF2Button ? RPChipType.RP2350 : RPChipType.RP2040;
+        var exportUf2Button = chip == RPChipType.RP2350 ? RP2350ExportUF2Button : RP2040ExportUF2Button;
+
         var imageSnapshot = _currentImage!.Copy();
         var drawSettings = GetDrawImageSettings();
 
-        ExportUF2Button.IsEnabled = false;
+        exportUf2Button.IsEnabled = false;
         BusyExporting = true;
         TimeSpan totalTime = TimeSpan.MaxValue;
 
-        await Task.Run(async () =>
+        // try/finally so a failure during generation never leaves BusyExporting stuck true
+        // (which would lock every export/estimate button for the rest of the session).
+        try
         {
-            using var img = imageSnapshot;
-            var (tdldBytes, time) = await GetTdldAsync(img, drawSettings, _currentSettings.SelectedSwitchVersion);
-            totalTime = time;
-
-            var uf2Bytes = UF2Flasher.BuildTDLDUF2(tdldBytes);
-            if (uf2Bytes != null && uf2Bytes.Length > 0)
+            await Task.Run(async () =>
             {
-                File.WriteAllBytes(outputPath, uf2Bytes);
-                AppendLog($"Saved UF2 to {outputPath}");
-            }
-        });
+                using var img = imageSnapshot;
+                var (tdldBytes, time) = await GetTdldAsync(img, drawSettings, _currentSettings.SelectedSwitchVersion);
+                totalTime = time;
 
-        ExportUF2Button.IsEnabled = true;
-        BusyExporting = false;
+                var uf2Bytes = UF2Flasher.BuildTDLDUF2(tdldBytes, chip);
+                if (uf2Bytes != null && uf2Bytes.Length > 0)
+                {
+                    File.WriteAllBytes(outputPath, uf2Bytes);
+                    AppendLog($"Saved UF2 to {outputPath}");
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            AppendLog($"UF2 export failed: {ex.Message}");
+        }
+        finally
+        {
+            exportUf2Button.IsEnabled = true;
+            BusyExporting = false;
+        }
 
         SetEstimate(totalTime);
     }
 
-    private static string GetBaseFirmwareFilePath()
+    private static string GetRPFirmwareFileName(RPChipType chip) =>
+        chip == RPChipType.RP2350
+            ? "TomodachiDrawer.Firmware.rp2350.uf2"
+            : "TomodachiDrawer.Firmware.rp2040.uf2";
+
+    private static string GetBaseFirmwareFilePath(RPChipType chip)
     {
+        var firmwareFileName = GetRPFirmwareFileName(chip);
         // Check if we're running on macOS and the app is running from app bundle, not CLI.
         var baseDirectory = AppContext.BaseDirectory;
         if (OperatingSystem.IsMacOS() && baseDirectory.Contains(".app/Contents/MacOS"))
         {
-            // In macOS, when you launch `.app` from Finder, the current working directory is root directory `/` (Gemini said),
-            // and the firmware file isn't located there (`/TomodachiDrawer.Firmware.uf2`).
-            // So we need to find the firmware file in the app bundle.
-            // `AppContext.BaseDirectory` resolves to `/path/to/TomodachiDrawer.app/Contents/MacOS/`, so we can get the path to the firmware file from there.
-            // The firmware file should locate at `/path/to/TomodachiDrawer.app/Contents/MacOS/TomodachiDrawer.Firmware.uf2`
+            // In macOS, when you launch `.app` from Finder, the current working directory is root directory `/`,
+            // and the firmware file isn't located there. `AppContext.BaseDirectory` resolves to
+            // `/path/to/TomodachiDrawer.app/Contents/MacOS/`, where the firmware file lives.
             return Path.Combine(baseDirectory, firmwareFileName);
         }
         else
@@ -1109,22 +1143,24 @@ public partial class MainWindow : Window
 
     private void FlashFirmwareButton_Click(object? sender, RoutedEventArgs e)
     {
-        var firmwareFilePath = GetBaseFirmwareFilePath();
-        var drivePath = UF2Flasher.FindRP2040Drive();
+        var chip = sender == RP2350FlashButton ? RPChipType.RP2350 : RPChipType.RP2040;
+        var firmwareFileName = GetRPFirmwareFileName(chip);
+        var firmwareFilePath = GetBaseFirmwareFilePath(chip);
+        var drivePath = UF2Flasher.FindDriveForChip(chip);
 
         if (!File.Exists(firmwareFilePath))
         {
             _ = ShowMessageAsync(
                 "Error flashing base firmware",
-                "For some reason could not locate TomodachiDrawer.Firmware.uf2"
-                    + "\nPlease ensure that you extracted the program to a zip folder, and ran the executable from that extracted folder."
-                    + "\nIf you can still not flash with this button, you can manually drag the TomodachiDrawer.Firmware.uf2 file to the RPI-RP2 drive on your system to flash it."
+                $"For some reason could not locate {firmwareFileName}"
+                    + "\nPlease ensure that you extracted the program to a folder, and ran the executable from that extracted folder."
+                    + $"\nIf you still cannot flash with this button, you can manually drag the {firmwareFileName} file to the device's drive on your system to flash it."
             );
             return;
         }
         if (drivePath == null)
         {
-            _ = ShowMessageAsync("Error", "RP2040 not detected. Connect it in BOOT mode first.");
+            _ = ShowMessageAsync("Error", $"{chip} not detected. Connect it in BOOT mode first.");
             return;
         }
         if (!CanAccessRP2040Drive(drivePath))
@@ -1135,7 +1171,7 @@ public partial class MainWindow : Window
         File.Copy(firmwareFilePath, Path.Combine(drivePath, firmwareFileName), overwrite: true);
 
         var timeout = System.DateTime.Now.AddSeconds(10);
-        while (UF2Flasher.FindRP2040Drive() != null)
+        while (UF2Flasher.FindDriveForChip(chip) != null)
         {
             if (System.DateTime.Now > timeout)
             {
@@ -1152,7 +1188,7 @@ public partial class MainWindow : Window
             "",
             "Base firmware flashed! You can now use the standard output button to output your images to it!\nIf this is your first time, its likely flashing red. Simply hold BOOT and plug it back in, or hold BOOT and press reset if you have it."
         );
-        AppendLog("Flashed base firmware to RP2040\r\n");
+        AppendLog($"Flashed base firmware to {chip}\r\n");
     }
 
     private void OutputExplanationButton_Click(object? sender, RoutedEventArgs e)

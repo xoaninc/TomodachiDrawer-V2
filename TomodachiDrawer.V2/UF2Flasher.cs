@@ -2,19 +2,21 @@ using System.Buffers.Binary;
 
 namespace TomodachiDrawer.UI.Avalonia;
 
+internal enum RPChipType { RP2040, RP2350 }
+
 internal static class UF2Flasher
 {
     // This is repeated code so i would like to make it shared in .Core later.
-    public static byte[] BuildTDLDUF2(byte[] tdldData)
+    public static byte[] BuildTDLDUF2(byte[] tdldData, RPChipType chip)
     {
         const int MaxTDLDSize = 1 * 1024 * 1024;
         if (tdldData.Length > MaxTDLDSize)
             throw new ArgumentException(
-                $"TDLD data exceeds maximum size of {MaxTDLDSize} bytes. This will shoot past the end of the RP2040 flash!"
+                $"TDLD data exceeds maximum size of {MaxTDLDSize} bytes. This will shoot past the end of the flash!"
             );
-        const uint TargetBase = 0x10100000u; // 1MB into the 2MB flash, so 1MB limit.
-        const uint FamilyId = 0xE48BFF56u;
+        const uint TargetBase = 0x10100000u; // 1MB into flash, so 1MB limit — same layout on both chips.
         const uint PayloadSize = 256u;
+        uint familyId = chip == RPChipType.RP2350 ? 0xe48bff57u : 0xE48BFF56u;
 
         int blockCount = (tdldData.Length + (int)PayloadSize - 1) / (int)PayloadSize;
         byte[] output = new byte[blockCount * 512];
@@ -32,7 +34,7 @@ internal static class UF2Flasher
             BinaryPrimitives.WriteUInt32LittleEndian(block[0x010..], PayloadSize);
             BinaryPrimitives.WriteUInt32LittleEndian(block[0x014..], (uint)i);
             BinaryPrimitives.WriteUInt32LittleEndian(block[0x018..], (uint)blockCount);
-            BinaryPrimitives.WriteUInt32LittleEndian(block[0x01C..], FamilyId);
+            BinaryPrimitives.WriteUInt32LittleEndian(block[0x01C..], familyId);
             BinaryPrimitives.WriteUInt32LittleEndian(block[0x1FC..], 0x0AB16F30);
 
             int srcOffset = i * (int)PayloadSize;
@@ -43,14 +45,18 @@ internal static class UF2Flasher
         return output;
     }
 
-    public static string? FindRP2040Drive()
+    public static string? FindRP2040Drive() => FindDriveByLabel("RPI-RP2");
+    public static string? FindRP2350Drive() => FindDriveByLabel("RP2350");
+    public static string? FindDriveForChip(RPChipType chip) =>
+        chip == RPChipType.RP2350 ? FindRP2350Drive() : FindRP2040Drive();
+
+    private static string? FindDriveByLabel(string label)
     {
-        // this should work crossplatform...
         foreach (var drive in DriveInfo.GetDrives())
         {
             try
             {
-                if (drive.IsReady && drive.VolumeLabel == "RPI-RP2")
+                if (drive.IsReady && drive.VolumeLabel == label)
                     return drive.RootDirectory.FullName;
             }
             catch { }
@@ -65,7 +71,7 @@ internal static class UF2Flasher
                     continue;
                 foreach (var userDir in Directory.GetDirectories(baseDir))
                 {
-                    var candidate = Path.Combine(userDir, "RPI-RP2");
+                    var candidate = Path.Combine(userDir, label);
                     if (Directory.Exists(candidate))
                         return candidate + Path.DirectorySeparatorChar;
                 }
@@ -74,11 +80,9 @@ internal static class UF2Flasher
         // Fallback for macOS
         else if (OperatingSystem.IsMacOS())
         {
-            var candidate = "/Volumes/RPI-RP2";
+            var candidate = $"/Volumes/{label}";
             if (Directory.Exists(candidate))
-                return candidate.EndsWith(Path.DirectorySeparatorChar)
-                    ? candidate
-                    : candidate + Path.DirectorySeparatorChar;
+                return candidate + Path.DirectorySeparatorChar;
         }
 
         return null;

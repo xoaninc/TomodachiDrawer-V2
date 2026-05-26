@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
-    <Version>0.2.1</Version>
+    <Version>0.3.0</Version>
     <!-- Ship as "TomodachiDrawer V2". The OS process / exe is the (space-free) assembly name
          TomodachiDrawerV2 (a space would be an invalid avares:// URI authority); the human-facing
          product/title carries the space. -->
@@ -43,7 +43,7 @@
     <AvaloniaResource Include="Assets\**" />
   </ItemGroup>
   <ItemGroup>
-    <None Update="TomodachiDrawer.Firmware.uf2">
+    <None Update="TomodachiDrawer.Firmware.*.uf2">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="TomodachiDrawer.Firmware.ESP32.bin">
@@ -69,11 +69,12 @@
       <ResourcesDir>$([System.IO.Path]::Combine('$(ContentsDir)', 'Resources'))</ResourcesDir>
     </PropertyGroup>
     <ItemGroup>
-      <PublishFiles Include="$(PublishDir)**\*.*" Exclude="$(AppBundleDir)\**\*.*;$(PublishDir)TomodachiDrawer.Firmware.uf2" />
+      <FirmwareFiles Include="$(PublishDir)TomodachiDrawer.Firmware.*.uf2" />
+      <PublishFiles Include="$(PublishDir)**\*.*" Exclude="$(AppBundleDir)\**\*.*;$(PublishDir)TomodachiDrawer.Firmware.*.uf2" />
     </ItemGroup>
     <MakeDir Directories="$(AppBundleDir);$(ContentsDir);$(MacOsDir);$(ResourcesDir)" />
     <Move SourceFiles="@(PublishFiles)" DestinationFolder="$(MacOsDir)\%(RecursiveDir)" />
-    <Copy SourceFiles="$(PublishDir)TomodachiDrawer.Firmware.uf2" DestinationFolder="$(MacOsDir)" />
+    <Copy SourceFiles="@(FirmwareFiles)" DestinationFolder="$(MacOsDir)" />
     <Copy SourceFiles="$(ProjectDir)Packaging/macOS/AppIcon.icns" DestinationFolder="$(ResourcesDir)" />
     <Copy SourceFiles="$(ProjectDir)Packaging/macOS/README.txt" DestinationFolder="$(PublishDir)" />
     <PropertyGroup>

@@ -1,0 +1,2 @@
+# Pico firmware UF2s are built in CI (per board) and downloaded at publish time, not committed.
+TomodachiDrawer.Firmware*.uf2

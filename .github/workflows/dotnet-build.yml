@@ -32,9 +32,44 @@ jobs:
       run: dotnet build --configuration ${{ matrix.configuration }} --no-restore
     - name: Test
       run: dotnet test --configuration ${{ matrix.configuration }} --no-build --verbosity normal /p:EnableWindowsTargeting=true
+  build-rp-firmware:
+    name: Compile ${{ matrix.platform }} Firmware
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - platform: rp2040
+            board: waveshare_rp2040_zero
+          - platform: rp2350
+            board: waveshare_rp2350_zero
+    steps:
+    - uses: actions/checkout@v6
+    - name: Install toolchain
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake ninja-build gcc-arm-none-eabi libnewlib-arm-none-eabi libstdc++-arm-none-eabi-newlib build-essential python3 git
+    - name: Checkout pico-sdk
+      uses: actions/checkout@v6
+      with:
+        repository: raspberrypi/pico-sdk
+        ref: '2.2.0'
+        path: pico-sdk
+        submodules: recursive
+    - name: Build firmware
+      working-directory: TomodachiDrawer.Firmware
+      env:
+        PICO_SDK_PATH: ${{ github.workspace }}/pico-sdk
+      run: |
+        cmake -G Ninja -B build-${{ matrix.platform }} -DPICO_BOARD=${{ matrix.board }} -DPICO_PLATFORM=${{ matrix.platform }}
+        cmake --build build-${{ matrix.platform }} --parallel
+    - name: Upload firmware artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: TomodachiDrawer-Firmware-${{ matrix.platform }}
+        path: TomodachiDrawer.Firmware/build-${{ matrix.platform }}/TomodachiDrawer.Firmware.${{ matrix.platform }}.uf2
   publish-avalonia:
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build, build-rp-firmware]
     strategy:
       fail-fast: false
       matrix:
@@ -48,6 +83,12 @@ jobs:
         dotnet-version: '10.0.x'
         cache: true
         cache-dependency-path: '**/*.csproj'
+    - name: Download firmware artifacts
+      uses: actions/download-artifact@v8
+      with:
+        pattern: TomodachiDrawer-Firmware-*
+        path: TomodachiDrawer.V2
+        merge-multiple: true
     - name: Build
       working-directory: TomodachiDrawer.V2
       run: |
@@ -89,7 +130,7 @@ jobs:
           if [[ "$dirname" == *"osx"* ]]; then
             echo "Mac .tar.gz"
             chmod +x "TomodachiDrawer V2.app/Contents/MacOS/TomodachiDrawerV2"
-            tar -czvf "../../final-packages/${outname}-${{ github.ref_name }}.tar.gz" "TomodachiDrawer V2.app" TomodachiDrawer.Firmware.uf2 README.txt
+            tar -czvf "../../final-packages/${outname}-${{ github.ref_name }}.tar.gz" "TomodachiDrawer V2.app" TomodachiDrawer.Firmware.rp2040.uf2 TomodachiDrawer.Firmware.rp2350.uf2 README.txt
           elif [[ "$dirname" == *"linux"* ]]; then
             echo "Linux .tar.gz"
             chmod +x TomodachiDrawerV2

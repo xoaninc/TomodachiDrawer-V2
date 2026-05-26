@@ -142,12 +142,12 @@ jobs:
           
           cd ../..
         done
-    - name: Create release draft
+    - name: Create release
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        # Create a draft release for this tag (review the artifacts, then hit Publish). If a
-        # release for the tag already exists, just (re)upload the assets instead of failing.
+        # Publish a release for this tag automatically. If a release for the tag already
+        # exists, just (re)upload the assets instead of failing.
         gh release create "${{ github.ref_name }}" final-packages/* \
-          --draft --generate-notes --title "TomodachiDrawer V2 ${{ github.ref_name }}" \
+          --generate-notes --title "TomodachiDrawer V2 ${{ github.ref_name }}" \
         || gh release upload "${{ github.ref_name }}" final-packages/* --clobber

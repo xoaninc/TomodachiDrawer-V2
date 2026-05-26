@@ -24,20 +24,22 @@ See #12 , unfortunately it seems that the Switch 1 is prone to desyncing randoml
 
 The program splits images into layers matched to colours in the game, and generates optimized routes for the pen to follow to draw your image.
 
-It has a crossplatform Avalonia UI desktop app that flashes directly to an **RP2040** (e.g. RP2040-Zero) **or an ESP32-S3**, which is then plugged into the USB port of a Switch or Switch 2 where it begins to draw.
+It has a crossplatform Avalonia UI desktop app that flashes directly to an **RP2040** (e.g. RP2040-Zero), an **RP2350** (e.g. RP2350-Zero / Raspberry Pi Pico 2), **or an ESP32-S3**, which is then plugged into the USB port of a Switch or Switch 2 where it begins to draw.
 
 ### What's new in V2
 
 - **ESP32-S3 support** alongside the original RP2040 — use a board you may already own (see below).
+- **RP2350 (Raspberry Pi Pico 2) support** — the Pico flow now covers RP2350-based boards
+  (RP2350-Zero, Pico 2) too, picked via a per-chip tab in the app (firmware is built for each board).
 - **HID report-descriptor fix** — the controller now declares the full 8-byte input report (the
   original declared 7 while sending 8; the Switch tolerated it but strict USB hosts dropped reports).
 - **Parallel route generation** — the per-layer/per-phase TSP solves run across CPU cores, making
   route generation ~6-7× faster on a multi-core machine, with byte-identical output to the original.
 
 ## Hardware Compatibility
-This was designed for an RP2040-Zero as it was one of the cheapest options, however any RP2040 based board *should* be compatible, with support for the LED on the standard Raspberry Pi Pico too.
+This was designed for an RP2040-Zero as it was one of the cheapest options, however any RP2040 based board *should* be compatible, with support for the LED on the standard Raspberry Pi Pico too. **RP2350-based boards** (RP2350-Zero, Raspberry Pi Pico 2) are also supported — pick the matching tab in the app's output panel.
 
-**V2 also supports the ESP32-S3** (tested on the ESP32-S3-DevKitC-1) in parallel with the RP2040 — see below.
+**V2 also supports the ESP32-S3** (tested on the ESP32-S3-DevKitC-1) in parallel with the RP2040/RP2350 — see below.
 
 ## ESP32-S3 Support (V2)
 

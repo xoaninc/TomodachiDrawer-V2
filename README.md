@@ -35,6 +35,10 @@ It has a crossplatform Avalonia UI desktop app that flashes directly to an **RP2
   original declared 7 while sending 8; the Switch tolerated it but strict USB hosts dropped reports).
 - **Parallel route generation** — the per-layer/per-phase TSP solves run across CPU cores, making
   route generation ~6-7× faster on a multi-core machine, with byte-identical output to the original.
+- **Reliable, verified ESP32-S3 flashing (0.4)** — every write is now checked against the device's
+  own flash MD5 and re-flashed if needed. Previously a flash could silently truncate, leaving a
+  drawing that hung on its last layer (LED stuck, never finishing); the parsers also now stop safely
+  on such a corrupt partition instead of hanging.
 
 ## Hardware Compatibility
 This was designed for an RP2040-Zero as it was one of the cheapest options, however any RP2040 based board *should* be compatible, with support for the LED on the standard Raspberry Pi Pico too. **RP2350-based boards** (RP2350-Zero, Raspberry Pi Pico 2) are also supported — pick the matching tab in the app's output panel.

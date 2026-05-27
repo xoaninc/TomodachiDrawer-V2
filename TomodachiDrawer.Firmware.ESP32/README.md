@@ -83,3 +83,10 @@ A .NET HID enumeration/readback test lives in `tests/integration/`
   not). This fix also benefits the RP2040 build.
 - Console is routed over USB-Serial-JTAG so flashing and `idf.py monitor`
   share the one USB-C cable.
+- **Verified flashing (0.4)** — the desktop app's ESP32 flasher now sends
+  `FLASH_END` (so the stub commits its final flash page — the C# ESPTool path
+  used to skip it, leaving the last page, EOF included, unwritten) and verifies
+  every write against the device's `SPI_FLASH_MD5`, re-flashing on a mismatch.
+  As defense in depth, the parser treats a long run of `0xFF` (erased/corrupt
+  flash) as corruption and stops on the error LED instead of decoding it as
+  runaway RLE repeats that would hang playback on the last layer.

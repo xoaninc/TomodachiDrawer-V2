@@ -526,7 +526,7 @@ public partial class MainWindow : Window
         {
             try
             {
-                await EspFlasher.FlashBaseFirmwareAsync(port, bytes, null, _cts.Token);
+                await EspFlasher.FlashBaseFirmwareAsync(port, bytes, null, _cts.Token, AppendLog);
             }
             catch (Exception ex) { error = ex.Message; }
         });
@@ -587,7 +587,7 @@ public partial class MainWindow : Window
                 var (tdldBytes, time) = await GetTdldAsync(img, drawSettings, _currentSettings.SelectedSwitchVersion);
                 totalTime = time;
                 AppendLog($"Flashing {tdldBytes.Length} bytes to the ESP32-S3 tdld partition via {port} ...");
-                await EspFlasher.FlashTdldAsync(port, tdldBytes, null, _cts.Token);
+                await EspFlasher.FlashTdldAsync(port, tdldBytes, null, _cts.Token, AppendLog);
             }
             catch (Exception ex) { error = ex.Message; }
         });

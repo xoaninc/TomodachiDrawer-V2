@@ -50,7 +50,36 @@ internal static class EspFlasher
             throw new ArgumentException(
                 $"TDLD data exceeds the {TdldPartitionSize} byte partition. " +
                 "This would overflow the ESP32-S3 tdld partition!");
-        return UploadAtOffsetAsync(serialPort, TdldPartitionOffset, tdldData, progress, ct, log);
+
+        // The ESP32-S3 stub flasher writes flash in 32-bit words. When the total
+        // length is NOT a multiple of 4, the final tail-page flush — which surfaces
+        // at FLASH_END — does an unaligned SPI write and fails with "FailedSPIOP".
+        // Observed: a 21962-byte .tdld (21962 % 4 == 2) failed every flash attempt,
+        // while 21588- and 22812-byte ones (both % 4 == 0) flashed fine. This is NOT
+        // about the file being small/low-colour (the earlier theory) — it is purely
+        // word alignment. esptool.py sidesteps it by padding the last block; we pad
+        // the whole image up to a 4-byte boundary with 0x00. The pad bytes land AFTER
+        // the .tdld's 0x00 EOF, so the firmware parser (which stops at the first 0x00)
+        // never reads them, and the MD5 we verify is taken over this same padded buffer.
+        byte[] aligned = PadToWordBoundary(tdldData);
+        return UploadAtOffsetAsync(serialPort, TdldPartitionOffset, aligned, progress, ct, log);
+    }
+
+    /// <summary>
+    /// Rounds <paramref name="data"/> up to the next multiple of 4 bytes (the stub
+    /// flasher's 32-bit write granularity), padding with 0x00. Returns the original
+    /// array unchanged when it is already word-aligned. Internal so the flash
+    /// diagnostic harness can exercise it directly.
+    /// </summary>
+    internal static byte[] PadToWordBoundary(byte[] data)
+    {
+        int alignedLength = (data.Length + 3) & ~3;
+        if (alignedLength == data.Length)
+            return data;
+
+        byte[] padded = new byte[alignedLength];
+        Array.Copy(data, padded, data.Length);
+        return padded; // trailing bytes default to 0x00 (EOF/Invalid opcode)
     }
 
     /// <summary>Flashes the merged base firmware image (bootloader+parttable+app).</summary>

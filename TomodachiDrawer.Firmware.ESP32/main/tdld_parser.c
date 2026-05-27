@@ -165,6 +165,23 @@ void tdld_next(tdld_ctx_t *ctx, tdld_step_t *step) {
             return;
         }
 
+        // Defensive: a long run of 0xFF is erased flash (a truncated/incomplete
+        // write), not real data. Decoding it would expand into millions of runaway
+        // RLE repeats and hang playback, so flag corruption and stop instead.
+        if (ctx->data[ctx->cursor] == 0xFF) {
+            size_t run = 0;
+            while (run < TDLD_MAX_FF_RUN
+                   && ctx->cursor + run < ctx->length
+                   && ctx->data[ctx->cursor + run] == 0xFF) {
+                run++;
+            }
+            if (run >= TDLD_MAX_FF_RUN) {
+                step->error = true;
+                ctx->cursor = ctx->length;  // don't re-enter on the next call
+                return;
+            }
+        }
+
         uint8_t record = ctx->data[ctx->cursor++];
         uint8_t opcode = record >> 4;
         uint8_t nibble = record & 0x0F;

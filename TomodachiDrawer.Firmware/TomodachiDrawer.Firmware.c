@@ -85,6 +85,11 @@ const uint8_t stick_axis_map[] = {
 #define OPCODE_REPEAT_LAST_1    0xE // Repeat the last 1 byte record the number of times in the bottom nibble (0-15)
 #define OPCODE_REPEAT_LAST_2    0xF // Repeat the last 1 byte record but with 12 bits (0-4096)
 
+// A run of this many consecutive 0xFF bytes is erased/corrupt flash (a truncated
+// write), never real data. Decoding it as runaway RLE repeats is what hangs
+// playback, so the parser bails to the error indicator instead.
+#define TDLD_MAX_FF_RUN 16
+
 // hid helpers. avoids repeated error-prone bit shite.
 static inline void hid_press(gamepad_button_t btn) {
     current_report[btn >> 8] |= (btn & 0xFF);
@@ -310,6 +315,14 @@ int main(void) {
     bool working = true;
     while (working) {
         tud_task();
+
+        // Defensive: a long 0xFF run = erased/corrupt flash (a truncated write),
+        // never real data. Stop on the error indicator rather than decoding it as
+        // runaway RLE repeats that would hang playback.
+        uint32_t ff_run = 0;
+        while (ff_run < TDLD_MAX_FF_RUN && ptr[ff_run] == 0xFF) ff_run++;
+        if (ff_run >= TDLD_MAX_FF_RUN) error_flash(5000); // corruption; never returns
+
         uint8_t record = *ptr++;
         uint8_t opcode = record >> 4;
         uint8_t nibble  = record & 0x0F;

@@ -197,6 +197,21 @@ static void test_release_all(void) {
     CHECK_EQ(s.report[2], DPAD_NEUTRAL, name);
 }
 
+static void test_long_ff_run_errors(void) {
+    const char *name = "long_ff_run";
+    // An erased-flash gap (>= TDLD_MAX_FF_RUN consecutive 0xFF, as left by a
+    // truncated flash write) must be flagged as corruption, not decoded into
+    // runaway RLE repeats that hang playback. PRESS A, then a run of 0xFF.
+    uint8_t data[6 + 1 + TDLD_MAX_FF_RUN] = {TDLD_HEADER, 0x10};
+    memset(data + 7, 0xFF, TDLD_MAX_FF_RUN);
+    tdld_ctx_t ctx;
+    tdld_init(&ctx, data, sizeof(data));
+    tdld_step_t s;
+    tdld_next(&ctx, &s);   // PRESS A
+    tdld_next(&ctx, &s);   // reaches the 0xFF run
+    CHECK(s.error, name);
+}
+
 int tdld_run_all_tests(void) {
     g_checks = 0;
     g_failures = 0;
@@ -215,6 +230,7 @@ int tdld_run_all_tests(void) {
     test_truncated_delay_errors();
     test_unknown_opcode_errors();
     test_release_all();
+    test_long_ff_run_errors();
 
     printf("=== %d checks, %d failures ===\n", g_checks, g_failures);
     if (g_failures == 0) {

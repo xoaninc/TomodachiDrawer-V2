@@ -33,6 +33,13 @@
 #define OPCODE_REPEAT_LAST_1  0xE  // replay last 1-byte record (4-bit count)
 #define OPCODE_REPEAT_LAST_2  0xF  // replay last 1-byte record (12-bit count)
 
+// A run of this many consecutive 0xFF bytes is treated as corruption (erased
+// flash from a truncated/incomplete write), not real program data. Real .tdld
+// streams never contain such a run (it would mean 8+ back-to-back max-count
+// REPEAT_LAST_2 records — tens of thousands of repeats of one move). Decoding
+// erased flash as RLE repeats is what hangs the device, so the parser bails.
+#define TDLD_MAX_FF_RUN 16
+
 // DPad states (report byte 2).
 #define DPAD_UP        0
 #define DPAD_UPRIGHT   1

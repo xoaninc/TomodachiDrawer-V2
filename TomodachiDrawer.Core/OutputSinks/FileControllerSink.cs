@@ -65,7 +65,8 @@ namespace TomodachiDrawer.Core.OutputSinks
 
         public void Delay(double milliseconds)
         {
-            if (milliseconds <= 0) return;
+            if (milliseconds <= 0)
+                return;
 
             int units = (int)Math.Round(milliseconds / OpcodeDelayResolutionMs);
             // max 0xFFF (4095) units per record = ~4s at 1ms resolution; loop for larger delays

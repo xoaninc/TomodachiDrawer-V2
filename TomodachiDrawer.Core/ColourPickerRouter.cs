@@ -24,8 +24,7 @@ namespace TomodachiDrawer.Core
             LinearRgbToHsv(linR, linG, linB, out float h, out float s, out float v);
 
             // Figure out the steps first off
-            int hueSteps = (int)
-                Math.Round((1.0f - h / 360.0f) * (FCR_HUE_SLIDER_STEP_COUNT - 1));
+            int hueSteps = (int)Math.Round((1.0f - h / 360.0f) * (FCR_HUE_SLIDER_STEP_COUNT - 1));
             int satSteps = (int)Math.Round((1.0f - s) * (FCR_SATURATION_STEP_COUNT - 1));
             int valSteps = (int)Math.Round((1.0f - v) * (FCR_VALUE_STEP_COUNT - 1));
 
@@ -75,4 +74,3 @@ namespace TomodachiDrawer.Core
         }
     }
 }
-

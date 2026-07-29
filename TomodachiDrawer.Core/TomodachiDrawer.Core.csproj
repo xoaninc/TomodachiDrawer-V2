@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-  <EmbeddedResource Include="Assets\Masks\*.png" />
+    <EmbeddedResource Include="Assets\Masks\*.png" />
   </ItemGroup>
 
   <ItemGroup>

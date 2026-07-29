@@ -9,7 +9,10 @@ namespace TomodachiDrawer.Core.Extensions
     // this is just some code from another project I had to cache it, realistically this is overkill since each fetch was only like... a microsecond.
     public static class EnumExtensions
     {
-        private static readonly ConcurrentDictionary<Type, Dictionary<string, string>> _descriptionCache = new();
+        private static readonly ConcurrentDictionary<
+            Type,
+            Dictionary<string, string>
+        > _descriptionCache = new();
 
         public static string GetDescription(this Enum value)
         {
@@ -25,7 +28,8 @@ namespace TomodachiDrawer.Core.Extensions
         }
 
         private static Dictionary<string, string> BuildDescriptionMap(
-            [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicFields)] Type t)
+            [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicFields)] Type t
+        )
         {
             var dict = new Dictionary<string, string>();
             foreach (var field in t.GetFields(BindingFlags.Public | BindingFlags.Static))
@@ -38,5 +42,4 @@ namespace TomodachiDrawer.Core.Extensions
             return dict;
         }
     }
-
 }

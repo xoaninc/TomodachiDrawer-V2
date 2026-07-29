@@ -1,5 +1,4 @@
 ﻿using SkiaSharp;
-
 using TomodachiDrawer.Core.ImageProcessing;
 using TomodachiDrawer.Core.ImageProcessing.Denoising;
 using TomodachiDrawer.Core.ImageProcessing.Quantizers;
@@ -348,9 +347,12 @@ namespace TomodachiDrawer.Core
 
                 // Determine which way we home for shorter travel.
                 // If we are past the halfway point, use the opposite side.
-                bool hueHomeLeft = steps.HueSteps <= (ColourPickerRouter.FCR_HUE_SLIDER_STEP_COUNT - 1) / 2;
-                bool satHomeRight = steps.SatSteps <= (ColourPickerRouter.FCR_SATURATION_STEP_COUNT - 1) / 2;
-                bool valHomeTop = steps.ValSteps <= (ColourPickerRouter.FCR_VALUE_STEP_COUNT - 1) / 2;
+                bool hueHomeLeft =
+                    steps.HueSteps <= (ColourPickerRouter.FCR_HUE_SLIDER_STEP_COUNT - 1) / 2;
+                bool satHomeRight =
+                    steps.SatSteps <= (ColourPickerRouter.FCR_SATURATION_STEP_COUNT - 1) / 2;
+                bool valHomeTop =
+                    steps.ValSteps <= (ColourPickerRouter.FCR_VALUE_STEP_COUNT - 1) / 2;
 
                 // Use stick for quicker homing
                 _realOutput.SetStick(Stick.LX, satHomeRight ? (byte)255 : (byte)0);

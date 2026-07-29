@@ -84,12 +84,11 @@ namespace TomodachiDrawer.Core
             output.ReleaseAll();
             output.Delay(75);
 
-
             // Open toolbar
             output.Tap(Button.X);
             output.Delay(500);
 
-            GoToToolbarIndex(output, ToolbarSelectIndex); // Move is closest to the the 
+            GoToToolbarIndex(output, ToolbarSelectIndex); // Move is closest to the the
 
             // 7 down 16 right
             const int downCount = 7;

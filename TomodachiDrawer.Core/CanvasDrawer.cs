@@ -32,11 +32,20 @@ namespace TomodachiDrawer.Core
         /// </summary>
         private readonly bool _parallelSolves;
 
+        /// <summary>
+        /// Overrides the pre-solve thread count. Null uses the default (~80% of logical cores).
+        /// Setting it to 1 runs the parallel code path serially, which isolates route differences
+        /// from CPU-throughput effects — the OR-Tools solver is wall-clock limited, so a solve that
+        /// shares cores explores less than the same solve run alone.
+        /// </summary>
+        private readonly int? _maxParallelism;
+
         public CanvasDrawer(
             ISwitchOutput outputSink,
             SwitchVersion switchVersion,
             Action<string>? logger = null,
-            bool parallelSolves = false
+            bool parallelSolves = false,
+            int? maxParallelism = null
         )
         {
             _realOutput = outputSink;
@@ -44,6 +53,7 @@ namespace TomodachiDrawer.Core
             _toolbar = new(outputSink);
             _log = logger ?? Console.WriteLine;
             _parallelSolves = parallelSolves;
+            _maxParallelism = maxParallelism is int m ? Math.Max(1, m) : null;
 
             if (switchVersion == SwitchVersion.None)
                 throw new ArgumentOutOfRangeException(
@@ -1057,7 +1067,8 @@ namespace TomodachiDrawer.Core
             }
 
             // ~80% of logical threads — leaves the machine responsive while solving.
-            int threadCount = Math.Max(1, (int)Math.Round(Environment.ProcessorCount * 0.8));
+            int threadCount =
+                _maxParallelism ?? Math.Max(1, (int)Math.Round(Environment.ProcessorCount * 0.8));
             _log($"Pre-solving {keys.Count} routes across {threadCount} threads...");
 
             var solved = new List<CanvasPoint>[keys.Count];

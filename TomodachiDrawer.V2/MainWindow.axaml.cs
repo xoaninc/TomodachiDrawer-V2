@@ -698,6 +698,8 @@ public partial class MainWindow : Window
         var preview = GetPreview();
 
         PreviewImage.Source = ToAvaloniaBitmap(preview);
+        // Size in the header, purely so the user can sanity-check what got loaded/resized.
+        PreviewHeader.Text = $"Preview ({_currentImage.Width}x{_currentImage.Height})";
         AppendLog(
             $"Updated preview for {_currentImagePath} using {quantizerSettings.quantizerName}"
         );

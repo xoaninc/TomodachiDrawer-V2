@@ -231,7 +231,7 @@
 								<Button x:Name="RP2040ExportUF2Button"
 										IsEnabled="False"
 										Content="Export to .UF2"
-										ToolTip.Tip="Converts your image to a .uf2 file for manual transfer. Use this if auto-detection doesn't find your device."
+										ToolTip.Tip="Converts your image to a .uf2 file for manual transfer. Use this if auto-detection doesn't find your device. This can also be used to prepare drawings ahead of time — drag and drop the .uf2 onto the RPI-RP2 or RP2350 drive once it has finished another image."
 										FontWeight="Bold"
 										HorizontalAlignment="Stretch"
 										Margin="2,0,0,0"
@@ -263,7 +263,7 @@
 								<Button x:Name="RP2350ExportUF2Button"
 										IsEnabled="False"
 										Content="Export to .UF2"
-										ToolTip.Tip="Converts your image to a .uf2 file for manual transfer. Use this if auto-detection doesn't find your device."
+										ToolTip.Tip="Converts your image to a .uf2 file for manual transfer. Use this if auto-detection doesn't find your device. This can also be used to prepare drawings ahead of time — drag and drop the .uf2 onto the RPI-RP2 or RP2350 drive once it has finished another image."
 										FontWeight="Bold"
 										HorizontalAlignment="Stretch"
 										Margin="2,0,0,0"
@@ -330,6 +330,7 @@
 			<Border Grid.Column="1" Classes="group" Margin="0,0,6,0">
 				<DockPanel>
 					<TextBlock DockPanel.Dock="Top"
+							   x:Name="PreviewHeader"
 							   Classes="header"
 							   Text="Preview" />
 					<Grid DockPanel.Dock="Top" Margin="0,0,0,6">

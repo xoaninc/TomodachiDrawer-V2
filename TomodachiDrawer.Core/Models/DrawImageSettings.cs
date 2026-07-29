@@ -17,5 +17,19 @@ namespace TomodachiDrawer.Core.Models
         public bool EnableExperimentalFeatures { get; set; } = false;
 
         public bool HomeToTopLeft { get; set; } = false;
+
+        public bool ReverseColourOrder { get; set; } = false;
+
+        /// <summary>
+        /// Lets the TSP solver stop once it stops improving, instead of always burning the whole
+        /// time limit. Off by default: upstream's author shipped it disabled because the two
+        /// coefficients below are unintuitive to tune, and testing suggested a sore spot around
+        /// 16-40 points where it does not settle.
+        /// </summary>
+        public bool EarlyTspExitEnabled { get; set; } = false;
+
+        public double EarlyTspExitRateCoefficient { get; set; } = 0.05;
+
+        public int EarlyTspExitSolutionsDistance { get; set; } = 10;
     }
 }

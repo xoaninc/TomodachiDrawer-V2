@@ -195,8 +195,7 @@ namespace TomodachiDrawer.Core
 
                 SKBitmap quantized = ArbitraryColourQuantizer.Quantize(
                     source,
-                    (int)quantizerSettings.colourCount,
-                    quantizerSettings.useDithering ?? default
+                    (int)quantizerSettings.colourCount
                 );
                 SKColor[] pixels = quantized.Pixels;
 

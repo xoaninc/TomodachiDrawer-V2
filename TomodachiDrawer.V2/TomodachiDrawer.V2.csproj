@@ -20,10 +20,13 @@
     <NoWarn>$(NoWarn);IL2104</NoWarn>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Avalonia" Version="12.0.3" />
-    <PackageReference Include="Avalonia.Desktop" Version="12.0.3" />
-    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.3" />
-    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.0.3" />
+    <PackageReference Include="Avalonia" Version="12.1.0" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.0" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.0" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.0" />
+    <!-- Skia's Linux natives don't flow transitively at the right version for the
+         linux-x64/linux-arm64 publishes, so pin them explicitly to match Core's SkiaSharp. -->
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.150.1" />
     <!-- Native C# esptool for flashing the ESP32-S3 firmware/data partitions -->
     <PackageReference Include="ESPTool" Version="3.0.3" />
   </ItemGroup>

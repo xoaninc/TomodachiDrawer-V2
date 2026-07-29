@@ -1401,7 +1401,18 @@ public partial class MainWindow : Window
     private void SwitchVersionComboBox_SelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
         if (SwitchVersionComboBox.SelectedIndex == 0)
+        {
             _currentSettings.SelectedSwitchVersion = SwitchVersion.Switch1;
+            _ = ShowMessageAsync(
+                "Switch 1 Warning",
+                "Unfortunately the Switch 1 is significantly more prone to desyncing than the Switch 2."
+                    + "\n\nOur leading theory as to why is that it is experiencing thermal issues whilst docked. The Switch 2 by comparison has a fan in its dock, the Switch 1 does not."
+                    + "\nSome users have reported they could avoid the desyncs by limiting drawing to 45~ minutes or less, although the most successful method is seemingly to just undock the Switch and plug the microcontroller in directly."
+                    + "\nHandheld runs at 1280x720 as opposed to 1920x1080 which can reduce the power draw, and being out of the dock it can get better airflow."
+                    + "\nUnfortunately, this is still not a guarantee to avoid desyncs."
+                    + "\n\nPlease keep this in mind when using the Switch 1 with this program."
+            );
+        }
         else
             _currentSettings.SelectedSwitchVersion = SwitchVersion.Switch2;
         SaveSettings();

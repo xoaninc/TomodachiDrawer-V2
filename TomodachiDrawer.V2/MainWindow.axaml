@@ -5,7 +5,8 @@
 		Icon="/Assets/Icon.png"
 		Title="TomodachiDrawer V2"
 		Width="1100" Height="700"
-		MinWidth="1000" MinHeight="600">
+		MinWidth="875" MinHeight="600">
+	<!-- KEEP WINDOW SIZE < 1280x720, with smaller mins preferred -->
 
 	<Window.Styles>
 		<Style Selector="Border.group">

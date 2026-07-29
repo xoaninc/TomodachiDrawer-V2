@@ -33,6 +33,28 @@ Stage 0's dependency bumps (so the ColorQuant palette change is already in).
   watch during Stage 2, because a dropped point makes both route cost and draw time go
   *down*.
 
+## `stage2.json` — after the routing work
+
+Same parameters, same machine. The change under test is `CutCycleNearCursor` (optimal cycle cut
+replacing the reverse-only `OrientFromCursor`), Held-Karp for small sets in the serial path, and
+OR-Tools disposal.
+
+| Image | Route cost vs serial: before → after | Parallel pen travel | Parallel draw time |
+|---|---|---|---|
+| `grid64` | +12.27 % → **−2.36 %** | 2817 → 2451 (−13.0 %) | 260.9 s → **242.3 s** (−7.1 %) |
+| `rings128` | +3.05 % → **−4.98 %** | 17231 → 15901 (−7.7 %) | 1283.0 s → **1216.2 s** (−5.2 %) |
+| `mosaic256` | +1.62 % → **−3.09 %** | 120332 → 114818 (−4.6 %) | 7456.1 s → **7180.3 s** (−3.7 %) |
+
+**The parallel path now beats the serial one on both pen travel and drawing length**, on every
+image, where before it was 1–12 % worse. That is the point of the optimal cut: the serial path
+cuts the tour wherever the OR-Tools depot happened to land (1 of n positions, ignoring the dropped
+arc), while the new code evaluates all 2n candidate cuts in one O(n) pass.
+
+Generation stayed fast — 7.7× / 6.0× / 5.2× versus serial — and serial generation itself got
+faster on the stamp-heavy image (12.08 s → 8.06 s) as Held-Karp took over the small point sets.
+
+`PaintActions` held at 1020 / 7457 / 32068 across all nine runs, so no points were lost.
+
 ### Reading it correctly
 
 - The **parallel-1thread** arm is the one to compare against serial. Plain `parallel` shares

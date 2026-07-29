@@ -19,9 +19,9 @@ namespace TomodachiDrawer.Core.Models
         public Dictionary<int, List<CanvasPoint>> StampsBySize = new();
 
         /// <summary>1x1 points for individual drawing.</summary>
-        public HashSet<CanvasPoint> FineDetailPoints = new();
+        public HashSet<CanvasPoint> FineDetailPoints = [];
 
         /// <summary>Interior points to click with the bucket tool after drawing the outline.</summary>
-        public HashSet<CanvasPoint> BucketClicks = new();
+        public HashSet<CanvasPoint> BucketClicks = [];
     }
 }

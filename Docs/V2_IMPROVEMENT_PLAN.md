@@ -224,13 +224,14 @@ Pure restructuring of the file we've diverged on most — all cost, zero user-vi
 | 5.4 | **`.tdld` round-trip test**: app writes a `.tdld` → firmware's host parser decodes it → assert the opcode sequence. Both halves already work offline (A.2); this just connects them and puts it in CI |
 | 5.5 | *(optional, later)* `VirtualCanvasSink` (Layer 2) — full input-stream + menu simulation, only if wrong-colour bugs actually appear |
 
-### Phase 5B — "Computer as controller" (NXBT)
+### Phase 5B — "Computer as controller" (NXBT) — ⏸ PARKED
 
-Decided 2026-07-29: **both approaches, exporter first**, after Phases 1–4 and after the
-renderer (5.2), which is what verifies the emitted macro offline.
+Decided and then parked on 2026-07-29: **V2 stays wired-only.** NXBT documents skipping inputs
+on long macros, which is the wrong trade for hour-long drawings on a project that already fights
+desyncs over a wire.
 
-Full spec — NXBT macro syntax, the three `.tdld` mismatches, acceptance criteria, hardware
-requirements — lives in **`Docs/BLUETOOTH_NXBT_PLAN.md`**.
+Research preserved in **`Docs/BLUETOOTH_NXBT_PLAN.md`**. Revisit only if NXBT gains reliable
+long-macro playback or confirmed Switch 2 support.
 
 ### Phase 6 — Dependencies & CI
 

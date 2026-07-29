@@ -1,14 +1,22 @@
 # Future plan — "computer as controller" over Bluetooth (NXBT)
 
-**Status:** decided, not started. Scheduled **after** the upstream sync and after the
+> ## ⏸ PARKED — 2026-07-29
+>
+> **V2 stays wired-only** (ESP32-S3 / RP2040 / RP2350 over USB HID). This work was decided
+> and then parked the same day, on the reliability evidence in §2: NXBT documents *skipping
+> inputs* on long macros, our drawings run for hours, and we already fight desyncs over a
+> wire. It also would not have removed the external hardware — it needs Linux + BlueZ and a
+> USB Bluetooth dongle.
+>
+> Nothing here was implemented. The document is kept because the research is sound and the
+> conclusion is conditional: **revisit only if NXBT gains reliable long-macro playback or
+> confirmed Switch 2 support.** Everything below is the plan as it stood, unchanged.
+
+**Original status:** decided, not started. Scheduled **after** the upstream sync and after the
 Layer-1 renderer. Researched 2026-07-29.
 
-Decision: **do both, exporter first.** (1) a `.tdld` → NXBT macro transcoder with an
+Decision at the time: **do both, exporter first.** (1) a `.tdld` → NXBT macro transcoder with an
 "Export NXBT macro" button, then (2) a live `BluetoothSink : ISwitchOutput`.
-
-This document exists so the reasoning doesn't have to be re-derived, including the case
-*against* putting it on the production path — which was raised twice and overruled. It is
-recorded, not open.
 
 ---
 

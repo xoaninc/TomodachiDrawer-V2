@@ -13,5 +13,8 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\TomodachiDrawer.Core\TomodachiDrawer.Core.csproj" />
+    <!-- For TraceRenderer. It lives in the bench rather than Core because nothing that ships needs
+         to render; referencing it here avoids a second copy that could drift from the drawer. -->
+    <ProjectReference Include="..\TomodachiDrawer.Bench\TomodachiDrawer.Bench.csproj" />
   </ItemGroup>
 </Project>

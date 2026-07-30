@@ -90,7 +90,7 @@ Shareable. It is already named constants, not inline literals: `ToolbarSelectInd
 
 So the risk I flagged earlier is smaller than it looked. Build it in two layers:
 
-#### Layer 1 — intent trace + renderer (do this first)
+#### Layer 1 — intent trace + renderer — ✅ BUILT (2026-07-30)
 `CanvasDrawer` already knows everything: cursor, active colour, active brush. So rather
 than reverse-engineering its state from the wire, have it emit a structured trace
 alongside the input stream — *"stamp colour C, brush B, at (x,y)"*, *"bucket fill at

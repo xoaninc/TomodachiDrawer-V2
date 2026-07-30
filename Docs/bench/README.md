@@ -72,6 +72,30 @@ One coverage number moved from 32068 to 32069 on `mosaic256`, which is the Stage
 (`CanonicalKey`) changing which colours collapse and therefore the bucket-fill choice by one
 action. It is identical across all three arms in that run, which is the invariant that matters.
 
+## Render verification
+
+Since 2026-07-30 every bench run also replays the drawing's *intent trace* onto a canvas and diffs
+it against the quantized source:
+
+```
+render: 100.00% match (65536/65536) missing=0 wrongColour=0 extra=0 overdraw=52470
+```
+
+All three images match **100%** on all three solver arms — no dropped cells, no wrong colours, no
+painting outside the image. That is independent confirmation that the Stage 2 routing changes did
+not lose anything, on top of the `PaintActions` invariant.
+
+`overdraw` is not a fault on its own: on `mosaic256` the full-canvas bucket fill legitimately paints
+everything before the layers paint over it. It matters in the fine-detail phase, where a non-zero
+count would mean the route is revisiting cells — `RenderFidelityTests` pins it at zero for a
+stamp-free, bucket-free drawing.
+
+Compare against the **quantized** source, never the raw image: the palette moves colours by design,
+so diffing the original fails on almost every pixel and tells you nothing.
+
+Dump PNGs to eyeball with `--render-out <dir>`. When something is off, the *shape* of the wrongness
+usually identifies the phase faster than the percentage does.
+
 ### Reading it correctly
 
 - The **parallel-1thread** arm is the one to compare against serial. Plain `parallel` shares

@@ -7,6 +7,7 @@ using TomodachiDrawer.Core.ImageProcessing.Quantizers;
 using TomodachiDrawer.Core.Interfaces;
 using TomodachiDrawer.Core.Models;
 using TomodachiDrawer.Core.OutputSinks;
+using TomodachiDrawer.Core.Tracing;
 
 namespace TomodachiDrawer.Core
 {
@@ -40,12 +41,19 @@ namespace TomodachiDrawer.Core
         /// </summary>
         private readonly int? _maxParallelism;
 
+        /// <summary>
+        /// Optional record of what this draw intends to paint. Null by default, so the shipping path
+        /// is untouched. See <see cref="IDrawTrace"/> for what it can and cannot prove.
+        /// </summary>
+        private readonly IDrawTrace? _trace;
+
         public CanvasDrawer(
             ISwitchOutput outputSink,
             SwitchVersion switchVersion,
             Action<string>? logger = null,
             bool parallelSolves = false,
-            int? maxParallelism = null
+            int? maxParallelism = null,
+            IDrawTrace? trace = null
         )
         {
             _realOutput = outputSink;
@@ -54,6 +62,7 @@ namespace TomodachiDrawer.Core
             _log = logger ?? Console.WriteLine;
             _parallelSolves = parallelSolves;
             _maxParallelism = maxParallelism is int m ? Math.Max(1, m) : null;
+            _trace = trace;
 
             if (switchVersion == SwitchVersion.None)
                 throw new ArgumentOutOfRangeException(
@@ -165,10 +174,13 @@ namespace TomodachiDrawer.Core
                     // Erase all first: on a full-size image a pixel can land on the top-left cell,
                     // and then the bucket fills just that pixel instead of the canvas.
                     _toolbar.ClearCanvas();
+                    _trace?.EraseAll();
 
                     _toolbar.SelectBucket();
                     _palette.SelectColour(bucketColour.Value, 25.0);
                     _realOutput.Tap(Button.A);
+                    // Seeded wherever the cursor is; the canvas is blank, so it floods everything.
+                    _trace?.BucketFill(bucketColour.Value.skColor, _cursorX, _cursorY);
                     _realOutput.Delay(1000); // This is probably generous but bucket fill seems to cause a short stutter.
                 }
                 else
@@ -275,6 +287,7 @@ namespace TomodachiDrawer.Core
                         {
                             NavigateTo(stampSink, point);
                             (stampSink as ISwitchOutput).Tap(Button.A);
+                            _trace?.Stamp(l.Colour.skColor, brushSize, point.X, point.Y);
                         }
                     }
                     _log($"\tStamps: {stampSink.TotalSeconds:F3}s");
@@ -295,7 +308,8 @@ namespace TomodachiDrawer.Core
                     int savedY = _cursorY;
 
                     var snakeSink = new TimingSink();
-                    FineDetailSnake(snakeSink, l);
+                    var snakeTrace = _trace != null ? new DrawTrace() : null;
+                    FineDetailSnake(snakeSink, l, snakeTrace);
 
                     int afterSnakeX = _cursorX;
                     int afterSnakeY = _cursorY;
@@ -304,10 +318,12 @@ namespace TomodachiDrawer.Core
                     _cursorY = savedY;
 
                     var tspSink = new TimingSink();
+                    var tspTrace = _trace != null ? new DrawTrace() : null;
                     FineDetailTsp(
                         tspSink,
                         l,
                         settings.TSPTimeLimit,
+                        tspTrace,
                         preRoutes != null
                         && preRoutes.TryGetValue(
                             (layerNumber, RoutingPhaseKind.FineDetail, 1),
@@ -326,6 +342,8 @@ namespace TomodachiDrawer.Core
                     if (usedSnake)
                     {
                         snakeSink.ReplayTo(_realOutput);
+                        if (_trace != null)
+                            snakeTrace!.ReplayTo(_trace);
                         totalInLayerTime += snakeSink.TotalTime.TotalSeconds;
                         _cursorX = afterSnakeX;
                         _cursorY = afterSnakeY;
@@ -333,6 +351,8 @@ namespace TomodachiDrawer.Core
                     else
                     {
                         tspSink.ReplayTo(_realOutput);
+                        if (_trace != null)
+                            tspTrace!.ReplayTo(_trace);
                         totalInLayerTime += tspSink.TotalTime.TotalSeconds;
                         _cursorX = afterTspX;
                         _cursorY = afterTspY;
@@ -384,6 +404,7 @@ namespace TomodachiDrawer.Core
                     {
                         NavigateTo(_realOutput, click);
                         _realOutput.Tap(Button.A);
+                        _trace?.BucketFill(l.Colour.skColor, click.X, click.Y);
                         _realOutput.Delay(500); // Bit generous given this is now switch 2 only but justtttt in case the switch struggles with the flood fill :p
                     }
                 }
@@ -616,14 +637,10 @@ namespace TomodachiDrawer.Core
             int brushSize
         )
         {
-            int half = brushSize / 2;
-            for (int dy = -half; dy <= half; dy++)
+            foreach (var (x, y) in BrushFootprint.Offsets(cx, cy, brushSize))
             {
-                for (int dx = -half; dx <= half; dx++)
-                {
-                    points.Remove(new CanvasPoint(cx + dx, cy + dy));
-                    map[cx + dx, cy + dy] = false;
-                }
+                points.Remove(new CanvasPoint(x, y));
+                map[x, y] = false;
             }
         }
 
@@ -635,18 +652,14 @@ namespace TomodachiDrawer.Core
             int brushSize
         )
         {
-            int half = brushSize / 2;
-            for (int dy = -half; dy <= half; dy++)
+            foreach (var (x, y) in BrushFootprint.Offsets(cx, cy, brushSize))
             {
-                for (int dx = -half; dx <= half; dx++)
-                {
-                    points.Add(new CanvasPoint(cx + dx, cy + dy));
-                    map[cx + dx, cy + dy] = true;
-                }
+                points.Add(new CanvasPoint(x, y));
+                map[x, y] = true;
             }
         }
 
-        private void FineDetailSnake(ISwitchOutput output, ColourLayer l)
+        private void FineDetailSnake(ISwitchOutput output, ColourLayer l, IDrawTrace? trace)
         {
             // find the nearest edge.
             int topLeft = MeasureDistanceToFromCurrent(l.Extents.MinX, l.Extents.MinY);
@@ -746,6 +759,8 @@ namespace TomodachiDrawer.Core
                 for (int x = startX; goingRight ? x <= endX : x >= endX; x += xStep)
                 {
                     bool isCurrentPoint = l.FineDetailPoints.Contains(new CanvasPoint(x, y));
+                    if (isCurrentPoint)
+                        trace?.FineDetail(l.Colour.skColor, x, y);
                     if (isCurrentPoint && !holdingA)
                     {
                         output.Press(Button.A);
@@ -809,6 +824,7 @@ namespace TomodachiDrawer.Core
             ISwitchOutput output,
             ColourLayer l,
             float timeLimitSeconds,
+            IDrawTrace? trace,
             PreSolvedRoute? precomputed = null
         )
         {
@@ -839,6 +855,7 @@ namespace TomodachiDrawer.Core
             {
                 var point = optimizedRoute[idx];
                 NavigateTo(output, point);
+                trace?.FineDetail(l.Colour.skColor, point.X, point.Y);
 
                 bool nextIsAdjacent =
                     idx + 1 < optimizedRoute.Count

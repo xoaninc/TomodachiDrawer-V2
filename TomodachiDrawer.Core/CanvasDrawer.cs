@@ -261,7 +261,7 @@ namespace TomodachiDrawer.Core
                             )
                         )
                         {
-                            optimizedRoute = CutCycleNearCursor(preStamp);
+                            optimizedRoute = OrientPreSolved(preStamp);
                         }
                         else
                         {
@@ -366,7 +366,7 @@ namespace TomodachiDrawer.Core
                         )
                     )
                     {
-                        optimizedBucketClickRoute = CutCycleNearCursor(preBucket);
+                        optimizedBucketClickRoute = OrientPreSolved(preBucket);
                     }
                     else
                     {
@@ -809,7 +809,7 @@ namespace TomodachiDrawer.Core
             ISwitchOutput output,
             ColourLayer l,
             float timeLimitSeconds,
-            IReadOnlyList<CanvasPoint>? precomputed = null
+            PreSolvedRoute? precomputed = null
         )
         {
             // Find start point, this logic will need adjusted in time
@@ -821,7 +821,7 @@ namespace TomodachiDrawer.Core
             if (precomputed != null)
             {
                 // Parallel pre-solve already produced the route; orient it from the live cursor.
-                optimizedRoute = CutCycleNearCursor(precomputed, holdsAAcrossAdjacent: true);
+                optimizedRoute = OrientPreSolved(precomputed.Value, holdsAAcrossAdjacent: true);
             }
             else
             {
@@ -880,7 +880,7 @@ namespace TomodachiDrawer.Core
         /// the input order if the solver returned nothing, so every key maps to a route covering
         /// all of its points. Pure: only calls <see cref="RouteSolver"/> (no cursor/palette state).
         /// </summary>
-        private Dictionary<(int, RoutingPhaseKind, int), List<CanvasPoint>> BuildPreRoutes(
+        private Dictionary<(int, RoutingPhaseKind, int), PreSolvedRoute> BuildPreRoutes(
             List<ColourLayer> layers,
             DrawImageSettings settings,
             CancellationToken cancellationToken
@@ -933,7 +933,7 @@ namespace TomodachiDrawer.Core
                 _maxParallelism ?? Math.Max(1, (int)Math.Round(Environment.ProcessorCount * 0.8));
             _log($"Pre-solving {keys.Count} routes across {threadCount} threads...");
 
-            var solved = new List<CanvasPoint>[keys.Count];
+            var solved = new PreSolvedRoute[keys.Count];
             Parallel.For(
                 0,
                 keys.Count,
@@ -953,20 +953,59 @@ namespace TomodachiDrawer.Core
                         // path uses NearestNeighbourRoute for the same case, but that one starts
                         // from the live cursor, which is still on the previous layer here.
                         solved[i] =
-                            route.Count > 0 ? route : RouteSolver.NearestNeighbourFrom(pts[i], 0);
+                            route.Count > 0
+                                ? new PreSolvedRoute(route, IsCycle: true)
+                                : new PreSolvedRoute(
+                                    RouteSolver.NearestNeighbourFrom(pts[i], 0),
+                                    IsCycle: false
+                                );
                     }
                     catch
                     {
                         // Never let one job abort the whole generation.
-                        solved[i] = RouteSolver.NearestNeighbourFrom(pts[i], 0);
+                        solved[i] = new PreSolvedRoute(
+                            RouteSolver.NearestNeighbourFrom(pts[i], 0),
+                            IsCycle: false
+                        );
                     }
                 }
             );
 
-            var dict = new Dictionary<(int, RoutingPhaseKind, int), List<CanvasPoint>>(keys.Count);
+            var dict = new Dictionary<(int, RoutingPhaseKind, int), PreSolvedRoute>(keys.Count);
             for (int i = 0; i < keys.Count; i++)
                 dict[keys[i]] = solved[i];
             return dict;
+        }
+
+        /// <summary>
+        /// Orients a pre-solved route for emission from the live cursor.
+        /// <para>
+        /// A closed cycle can be cut anywhere, so <see cref="CutCycleNearCursor"/> picks the best of
+        /// all 2n candidates. An <b>open</b> path cannot: cutting it mid-way would make the emission
+        /// traverse a closing arc the solver never paid for. So for those the only valid choices are
+        /// its two existing ends — keep it, or reverse it — which is what the pre-solve's
+        /// nearest-neighbour fallback produces.
+        /// </para>
+        /// </summary>
+        private List<CanvasPoint> OrientPreSolved(
+            PreSolvedRoute pre,
+            bool holdsAAcrossAdjacent = false
+        )
+        {
+            var route = pre.Points;
+            if (pre.IsCycle)
+                return CutCycleNearCursor(route, holdsAAcrossAdjacent);
+
+            int n = route.Count;
+            if (n < 2)
+                return new List<CanvasPoint>(route);
+
+            // Open path: cut only the phantom arc (n-1 -> 0), i.e. start from whichever real end is
+            // nearer the cursor.
+            bool forward =
+                MeasureDistanceToFromCurrent(route[0].X, route[0].Y)
+                <= MeasureDistanceToFromCurrent(route[^1].X, route[^1].Y);
+            return ApplyCut(route, n - 1, forward);
         }
 
         /// <summary>

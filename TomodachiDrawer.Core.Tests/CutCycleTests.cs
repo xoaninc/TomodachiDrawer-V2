@@ -191,5 +191,60 @@ namespace TomodachiDrawer.Core.Tests
                 Assert.Equal(best, chosen);
             }
         }
+
+        /// <summary>
+        /// An <b>open</b> path (what the pre-solve's nearest-neighbour fallback produces) must only
+        /// ever be emitted from one of its two real ends. Cutting it mid-way would make the drawing
+        /// traverse a closing arc the greedy path never paid for.
+        /// <para>
+        /// Before this was made explicit, safety rested on an accident: the score model happened to
+        /// price the phantom arc, so the chosen cut could not be worse than emitting as-is. This
+        /// pins the intended behaviour instead of the accident.
+        /// </para>
+        /// </summary>
+        [Theory]
+        [InlineData(0, 0)]
+        [InlineData(128, 128)]
+        [InlineData(255, 255)]
+        public void Open_path_is_only_ever_emitted_from_one_of_its_ends(int cursorX, int cursorY)
+        {
+            var input = Scatter(40, 99);
+            var open = RouteSolver.NearestNeighbourFrom(input, 0);
+
+            // Cutting the phantom arc (n-1 -> 0) is the only valid choice; both directions are fine.
+            var forward = CanvasDrawer.ApplyCut(open, open.Count - 1, forward: true);
+            var backward = CanvasDrawer.ApplyCut(open, open.Count - 1, forward: false);
+
+            Assert.Equal(open[0], forward[0]);
+            Assert.Equal(open[^1], forward[^1]);
+            Assert.Equal(open[^1], backward[0]);
+            Assert.Equal(open[0], backward[^1]);
+
+            // And whichever end is nearer the cursor is the cheaper one to start from, which is the
+            // rule OrientPreSolved applies.
+            long dForward = Math.Max(Math.Abs(cursorX - open[0].X), Math.Abs(cursorY - open[0].Y));
+            long dBackward = Math.Max(
+                Math.Abs(cursorX - open[^1].X),
+                Math.Abs(cursorY - open[^1].Y)
+            );
+            long costForward = dForward + PathTravel(forward);
+            long costBackward = dBackward + PathTravel(backward);
+
+            // Traversal cost is direction-independent for a symmetric metric, so the cursor leg is
+            // the only difference — the nearer end must win.
+            Assert.Equal(PathTravel(forward), PathTravel(backward));
+            if (dForward <= dBackward)
+                Assert.True(costForward <= costBackward);
+            else
+                Assert.True(costBackward < costForward);
+        }
+
+        private static long PathTravel(IReadOnlyList<CanvasPoint> order)
+        {
+            long total = 0;
+            for (int i = 0; i + 1 < order.Count; i++)
+                total += Cheb(order[i], order[i + 1]);
+            return total;
+        }
     }
 }

@@ -310,7 +310,10 @@ namespace TomodachiDrawer.Core
 
             if (!_hotbarHomed)
             {
-                Console.WriteLine("Homing hotbar, hasnt been done yet.");
+                // Was a bare Console.WriteLine, which bypassed the host's logger and printed to
+                // stdout for every consumer of Core — including every bench run.
+                // ColourPalette has no logger, and threading one in for a single once-per-draw
+                // trace is not worth it, so it is simply dropped.
                 // We need to home, could be at an unknown position.
                 // Slam against the top so we know that, and go down from the header.
                 for (int i = 0; i < HotbarSlots + HotbarHeaderRows; i++)

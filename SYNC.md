@@ -14,14 +14,35 @@ git diff <last-synced-commit> upstream/master
 Read individual ports with `git show <hash> -- <path>` or
 `git show upstream/master:<path>`. After porting, update the marker here.
 
+### ⚠ Do not fetch upstream's tags into `refs/tags`
+
+V2 and upstream use the same `X.Y.Z` tag scheme, so upstream's tags **collide with ours**. A
+plain `git fetch upstream --tags` silently takes over the version numbers we have not released
+yet — it is how `0.5.0` ended up pointing at one of Lucas7yoshi's commits, which would have made
+tagging our own 0.5.0 fail.
+
+The remote is configured to keep them apart, and it should stay that way:
+
+```sh
+git config remote.upstream.tagOpt --no-tags
+git config remote.upstream.fetch '+refs/heads/*:refs/remotes/upstream/*'
+git config --add remote.upstream.fetch '+refs/tags/*:refs/upstream-tags/*'
+```
+
+Upstream releases are then referenced as `upstream-tags/0.8.3`, and `refs/tags/` contains only
+V2's own releases. Check with `git tag -l` — if you see anything past our latest release, the
+namespace has been polluted again.
+
 ## Last synced
 
 - **Through:** `upstream/master @ 8720417` ("CSharpier format pass", one commit past
-  upstream tag **0.8.3** = `a50213c`)
+  upstream tag **0.8.3** = `a50213c`, i.e. `upstream-tags/0.8.3`)
 - **Fork point:** upstream `d5f64bc` (merge of PR #38, virtual-gamepad-sink) =
   our pre-V2 baseline.
 - **Date:** 2026-07-29
 - **Previous marker:** `6ce4683` (upstream tag 0.6.0), 2026-05-26 — 122 commits ago.
+- Upstream has already moved past this marker (dependabot bumps). Nothing behavioural, but
+  re-diff before assuming this list is still current.
 
 Full analysis of this sync: [`Docs/UPSTREAM_SYNC_AUDIT.md`](./Docs/UPSTREAM_SYNC_AUDIT.md).
 

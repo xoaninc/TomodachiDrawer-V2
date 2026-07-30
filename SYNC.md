@@ -104,14 +104,23 @@ Full analysis of this sync: [`Docs/UPSTREAM_SYNC_AUDIT.md`](./Docs/UPSTREAM_SYNC
 ### V2-only work in this release (not from upstream)
 - **`CutCycleNearCursor`** replaces `OrientFromCursor`. The old one only reversed, considering 2
   of 2n candidate cuts. An OrTools tour is a closed cycle whose cost is rotation-invariant, so
-  the best cut is found over all 2n candidates in one O(n) pass — and it refuses to cut
-  Chebyshev-1 arcs, which are A-hold runs. **Result: the parallel path now beats the serial one
-  on both pen travel and drawing length**, where before it was 1-12% worse.
+  the best cut is found over all 2n candidates in one O(n) pass. Cutting a Chebyshev-1 arc splits
+  an A-hold run, which is priced at exactly **+1 tap** (its real cost) and only for the
+  fine-detail phase — the stamp and bucket phases emit one plain `Tap(A)` per point and have no
+  hold runs at all. **Result: the parallel path now beats the serial one on both pen travel and
+  drawing length**, where before it was 1-12% worse.
+- **`PreSolvedRoute`** tags each pre-solved route as a closed cycle or an open path, so the
+  nearest-neighbour fallback (which is open, with no closing arc) is only ever emitted from one of
+  its two real ends instead of being cut mid-way.
+- **`RouteFingerprint`** moved the route-cache key into Core, where a reflection-driven test
+  asserts every `DrawImageSettings` property invalidates the cache. Missing one means Export
+  silently flashes the *previous* drawing while logging that the route is current.
 - **`TomodachiDrawer.Bench`** — route cost, coverage and generation wall-clock across three arms
   (serial / parallel / parallel pinned to one thread). See [`Docs/bench/`](./Docs/bench/).
-- **`TomodachiDrawer.Core.Tests`** — 15 tests. The permutation invariant is the important one: a
+- **`TomodachiDrawer.Core.Tests`** — 47 tests. The permutation invariant is the important one: a
   dropped point makes route cost *and* draw time go down, so it is the one regression the
-  headline metrics would report as an improvement.
+  headline metrics would report as an improvement. `CutCycleTests` additionally brute-forces all
+  2n candidate cuts to prove the chosen one is optimal.
 - csharpier pinned at 1.3.0 in `.config/dotnet-tools.json`, verified to reproduce upstream's
   formatting byte for byte.
 
@@ -121,8 +130,11 @@ Full analysis of this sync: [`Docs/UPSTREAM_SYNC_AUDIT.md`](./Docs/UPSTREAM_SYNC
   own server). Not appropriate for an independent fork.
 - **Sentry crash reporting** (`31affe2`, `5dd17d1`, `b32975f`, `6d19f10`, `06e009a`) — decided
   against for V2. Note this is a *separate* decision from the telemetry skip above: Sentry is a
-  third-party crash reporter, not the author's own server. The non-Sentry macOS fail-state
-  handling from `ef568b7` is being ported separately.
+  third-party crash reporter, not the author's own server. The **useful** half of `ef568b7` was
+  taken separately: not its dialog (V2 already had one, inherited from Podter's pre-fork macOS
+  work) but its field finding — that passing the drive-access pre-check does not guarantee the
+  write succeeds. The UF2 write is now guarded and retries once. The rest of that commit is
+  Sentry instrumentation its own author labels temporary.
 - **`5dd17d1`'s property-group unification** (the non-Sentry half) — upstream's `BundleMacOSApp`
   group carries `<PublishTrimmed>true</PublishTrimmed>`, and V2 deliberately disabled trimming
   (`ae7f711`: it stripped ESPTool's chip detection and broke ESP32 flashing).

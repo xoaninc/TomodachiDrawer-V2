@@ -169,6 +169,13 @@
 								  ToolTip.Tip="At the beginning, the program will zoom out, and set itself at the very very top left of the canvas. This is automatically checked for full size (256x256) images."
 								  IsCheckedChanged="EnableHomeCanvas_IsCheckedChanged"
 						/>
+						<Button x:Name="ExportTDLDButton"
+								Content="Export to .tdld"
+								IsEnabled="False"
+								ToolTip.Tip="Saves the raw input stream as a .tdld file. This is the chip-agnostic format the firmware replays, so it is what to use for other players of it (Flipper Zero forks and the like) or to keep a drawing around without flashing anything."
+								HorizontalAlignment="Stretch"
+								Margin="0,6,0,0"
+								Click="ExportTDLDButton_Click" />
 						<Button x:Name="CancelDrawButton"
 								Content="Cancel Generation"
 								IsEnabled="False"

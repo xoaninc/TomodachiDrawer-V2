@@ -391,6 +391,8 @@ public partial class MainWindow : Window
 
                         // Estimate only needs an image — no device required
                         EstimateButton.IsEnabled = hasImage && !BusyExporting;
+                        // .tdld needs no microcontroller — an image is enough.
+                        ExportTDLDButton.IsEnabled = hasImage && !BusyExporting;
 
                         lastRp2040 = UpdateChipUI(RPChipType.RP2040, rp2040Path, hasImage, lastRp2040);
                         lastRp2350 = UpdateChipUI(RPChipType.RP2350, rp2350Path, hasImage, lastRp2350);
@@ -996,6 +998,86 @@ public partial class MainWindow : Window
             _generationCts.Cancel();
             CancelDrawButton.IsEnabled = false;
         }
+    }
+
+    /// <summary>
+    /// Saves the raw .tdld. Ported from upstream a1732a9 but in its post-725faf2 form: the original
+    /// gated on `string.IsNullOrEmpty(_currentImagePath)` and re-decoded the file from disk, which
+    /// is the NRE that 725faf2 later fixed. V2 snapshots _currentImage instead, like every other
+    /// export path here.
+    /// </summary>
+    private async void ExportTDLDButton_Click(object? sender, RoutedEventArgs e)
+    {
+        if (_currentImage == null)
+            return;
+
+        if (_currentSettings.SelectedSwitchVersion == SwitchVersion.None)
+        {
+            _ = ShowMessageAsync(
+                "Select Switch Version",
+                "For compatibility, you must select a switch version in the dropdown."
+                    + "\n\nSwitch 1 is more prone to desyncs, so this avoids certain things that are particularly prone to desyncing."
+            );
+            return;
+        }
+
+        var file = await StorageProvider.SaveFilePickerAsync(
+            new FilePickerSaveOptions
+            {
+                Title = "Save .tdld",
+                DefaultExtension = "tdld",
+                FileTypeChoices =
+                [
+                    new FilePickerFileType("TDLD input stream") { Patterns = ["*.tdld"] },
+                    new FilePickerFileType("All Files") { Patterns = ["*.*"] },
+                ],
+            }
+        );
+
+        var outputPath = file?.TryGetLocalPath();
+        if (outputPath == null)
+            return;
+
+        var imageSnapshot = _currentImage!.Copy();
+        var drawSettings = GetDrawImageSettings();
+        var token = BeginGeneration();
+
+        ExportTDLDButton.IsEnabled = false;
+        BusyExporting = true;
+        TimeSpan totalTime = TimeSpan.MaxValue;
+
+        try
+        {
+            await Task.Run(async () =>
+            {
+                using var img = imageSnapshot;
+                var (tdldBytes, time) = await GetTdldAsync(
+                    img,
+                    drawSettings,
+                    _currentSettings.SelectedSwitchVersion,
+                    token
+                );
+                totalTime = time;
+                File.WriteAllBytes(outputPath, tdldBytes);
+                AppendLog($"Saved {tdldBytes.Length} bytes of .tdld to {outputPath}");
+            });
+        }
+        catch (OperationCanceledException)
+        {
+            AppendLog("Generation cancelled.");
+        }
+        catch (Exception ex)
+        {
+            AppendLog($".tdld export failed: {ex.Message}");
+        }
+        finally
+        {
+            BusyExporting = false;
+            EndGeneration();
+            ExportTDLDButton.IsEnabled = _currentImage != null;
+        }
+
+        SetEstimate(totalTime);
     }
 
     private void SetEstimate(TimeSpan time)

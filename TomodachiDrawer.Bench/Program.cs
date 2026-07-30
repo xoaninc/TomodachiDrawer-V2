@@ -48,9 +48,10 @@ namespace TomodachiDrawer.Bench
             int repeats = IntArg(args, "--repeats", 1);
             int colours = IntArg(args, "--colours", 64);
             string quantizer = StringArg(args, "--quantizer", "Arbitrary");
-            var version = StringArg(args, "--switch", "2") == "1"
-                ? SwitchVersion.Switch1
-                : SwitchVersion.Switch2;
+            var version =
+                StringArg(args, "--switch", "2") == "1"
+                    ? SwitchVersion.Switch1
+                    : SwitchVersion.Switch2;
             string? outPath = OptionalArg(args, "--out");
 
             Console.WriteLine(
@@ -80,14 +81,22 @@ namespace TomodachiDrawer.Bench
                     Result? best = null;
                     for (int i = 0; i < repeats; i++)
                     {
-                        var r = await RunOnce(name, bmp, arm, tspLimit, quantizer, colours, version);
+                        var r = await RunOnce(
+                            name,
+                            bmp,
+                            arm,
+                            tspLimit,
+                            quantizer,
+                            colours,
+                            version
+                        );
                         if (best is null || r.DPadTaps < best.DPadTaps)
                             best = r;
                     }
                     results.Add(best!);
                     Console.WriteLine(
-                        $"  {name,-10} {arm.Name,-16} dpad={best!.DPadTaps,8}  paint={best.PaintActions,7}  "
-                            + $"draw={best.DrawSeconds,9:F1}s  gen={best.GenerateSeconds,6:F2}s"
+                        $"  {name, -10} {arm.Name, -16} dpad={best!.DPadTaps, 8}  paint={best.PaintActions, 7}  "
+                            + $"draw={best.DrawSeconds, 9:F1}s  gen={best.GenerateSeconds, 6:F2}s"
                     );
                 }
                 ReportDeltas(name, results);
@@ -178,9 +187,10 @@ namespace TomodachiDrawer.Bench
             if (serial is null || oneThread is null)
                 return;
 
-            double pct = serial.DPadTaps == 0
-                ? 0
-                : 100.0 * (oneThread.DPadTaps - serial.DPadTaps) / serial.DPadTaps;
+            double pct =
+                serial.DPadTaps == 0
+                    ? 0
+                    : 100.0 * (oneThread.DPadTaps - serial.DPadTaps) / serial.DPadTaps;
             var sb = new StringBuilder();
             sb.Append(
                 string.Format(

@@ -16,7 +16,7 @@
     <Product>TomodachiDrawer V2</Product>
     <AssemblyTitle>TomodachiDrawer V2</AssemblyTitle>
     <ApplicationIcon>TomodachiDrawer.ico</ApplicationIcon>
-	<!-- suppress warning from Google.OrTools from trimming since we are rooting it. -->
+    <!-- suppress warning from Google.OrTools from trimming since we are rooting it. -->
     <NoWarn>$(NoWarn);IL2104</NoWarn>
   </PropertyGroup>
   <ItemGroup>
@@ -32,7 +32,10 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\TomodachiDrawer.Core\TomodachiDrawer.Core.csproj" />
-    <ProjectReference Condition="'$(Configuration)' == 'Debug'" Include="..\TomodachiDrawer.DebugTools\TomodachiDrawer.DebugTools.csproj" />
+    <ProjectReference
+      Condition="'$(Configuration)' == 'Debug'"
+      Include="..\TomodachiDrawer.DebugTools\TomodachiDrawer.DebugTools.csproj"
+    />
   </ItemGroup>
   <ItemGroup>
     <!-- publish trimming thing-->
@@ -64,7 +67,11 @@
     <PublishSingleFile>false</PublishSingleFile>
     <IncludeNativeLibrariesForSelfExtract>false</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
-  <Target Name="BundleMacOS" AfterTargets="Publish" Condition="'$(BundleMacOSApp)' == 'true' And $(RuntimeIdentifier.StartsWith('osx'))">
+  <Target
+    Name="BundleMacOS"
+    AfterTargets="Publish"
+    Condition="'$(BundleMacOSApp)' == 'true' And $(RuntimeIdentifier.StartsWith('osx'))"
+  >
     <PropertyGroup>
       <AppBundleDir>$([System.IO.Path]::Combine('$(PublishDir)', 'TomodachiDrawer V2.app'))</AppBundleDir>
       <ContentsDir>$([System.IO.Path]::Combine('$(AppBundleDir)', 'Contents'))</ContentsDir>
@@ -73,12 +80,18 @@
     </PropertyGroup>
     <ItemGroup>
       <FirmwareFiles Include="$(PublishDir)TomodachiDrawer.Firmware.*.uf2" />
-      <PublishFiles Include="$(PublishDir)**\*.*" Exclude="$(AppBundleDir)\**\*.*;$(PublishDir)TomodachiDrawer.Firmware.*.uf2" />
+      <PublishFiles
+        Include="$(PublishDir)**\*.*"
+        Exclude="$(AppBundleDir)\**\*.*;$(PublishDir)TomodachiDrawer.Firmware.*.uf2"
+      />
     </ItemGroup>
     <MakeDir Directories="$(AppBundleDir);$(ContentsDir);$(MacOsDir);$(ResourcesDir)" />
     <Move SourceFiles="@(PublishFiles)" DestinationFolder="$(MacOsDir)\%(RecursiveDir)" />
     <Copy SourceFiles="@(FirmwareFiles)" DestinationFolder="$(MacOsDir)" />
-    <Copy SourceFiles="$(ProjectDir)Packaging/macOS/AppIcon.icns" DestinationFolder="$(ResourcesDir)" />
+    <Copy
+      SourceFiles="$(ProjectDir)Packaging/macOS/AppIcon.icns"
+      DestinationFolder="$(ResourcesDir)"
+    />
     <Copy SourceFiles="$(ProjectDir)Packaging/macOS/README.txt" DestinationFolder="$(PublishDir)" />
     <PropertyGroup>
       <PlistSource>$(ProjectDir)Packaging/macOS/Info.plist</PlistSource>

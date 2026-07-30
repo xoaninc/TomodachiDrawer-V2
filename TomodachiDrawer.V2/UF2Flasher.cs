@@ -2,7 +2,11 @@ using System.Buffers.Binary;
 
 namespace TomodachiDrawer.UI.Avalonia;
 
-internal enum RPChipType { RP2040, RP2350 }
+internal enum RPChipType
+{
+    RP2040,
+    RP2350,
+}
 
 internal static class UF2Flasher
 {
@@ -46,7 +50,9 @@ internal static class UF2Flasher
     }
 
     public static string? FindRP2040Drive() => FindDriveByLabel("RPI-RP2");
+
     public static string? FindRP2350Drive() => FindDriveByLabel("RP2350");
+
     public static string? FindDriveForChip(RPChipType chip) =>
         chip == RPChipType.RP2350 ? FindRP2350Drive() : FindRP2040Drive();
 

@@ -55,6 +55,23 @@ faster on the stamp-heavy image (12.08 s → 8.06 s) as Held-Karp took over the 
 
 `PaintActions` held at 1020 / 7457 / 32068 across all nine runs, so no points were lost.
 
+## `stage2-fixed.json` — after correcting the cut cost model
+
+The first cut implementation used a *lexicographic* tie-break (any arc >= 2 beat any short arc
+regardless of cost) and applied it to all three phases. Adversarial verification showed the real
+penalty for splitting an A-hold run is exactly one extra press/release group, and that the stamp
+and bucket phases have no hold runs at all — they emit one plain `Tap(A)` per point.
+
+Re-measured after replacing it with the exact cost model: **-2.36 % / -4.98 % / -3.07 %**, i.e.
+unchanged. The synthetic bench images do not contain the pathological shape (a near-complete
+single-pixel outline), so this was a robustness fix rather than a measurable one. `CutCycleTests`
+brute-forces all 2n candidates on ring, gapped-ring and scattered inputs so the regression cannot
+return.
+
+One coverage number moved from 32068 to 32069 on `mosaic256`, which is the Stage 3 colour merge
+(`CanonicalKey`) changing which colours collapse and therefore the bucket-fill choice by one
+action. It is identical across all three arms in that run, which is the invariant that matters.
+
 ### Reading it correctly
 
 - The **parallel-1thread** arm is the one to compare against serial. Plain `parallel` shares

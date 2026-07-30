@@ -1,3 +1,7 @@
+using System.IO.Ports;
+using System.Reflection;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -8,16 +12,8 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Styling;
 using Avalonia.Threading;
-
 using Microsoft.Win32;
-
 using SkiaSharp;
-
-using System.IO.Ports;
-using System.Reflection;
-using System.Text.Json;
-using System.Text.Json.Serialization;
-
 using TomodachiDrawer.Core;
 using TomodachiDrawer.Core.Extensions;
 using TomodachiDrawer.Core.ImageProcessing;
@@ -25,10 +21,11 @@ using TomodachiDrawer.Core.ImageProcessing.Denoising;
 using TomodachiDrawer.Core.ImageProcessing.Quantizers;
 using TomodachiDrawer.Core.Models;
 using TomodachiDrawer.Core.OutputSinks;
+using Button = Avalonia.Controls.Button; // conflict with the Button enum in SinkEnums
 #if DEBUG
 using TomodachiDrawer.DebugTools;
 #endif
-using Button = Avalonia.Controls.Button; // conflict with the Button enum in SinkEnums
+
 
 namespace TomodachiDrawer.UI.Avalonia;
 
@@ -57,7 +54,6 @@ public partial class MainWindow : Window
     //private SwitchVersion _selectedSwitchVersion = SwitchVersion.None;
     //private int _selectedThemeIndex = 0; // 0 is System.
     private AppSettings _currentSettings = new(); // All cases will result in it being non-null but IntelliSense cant see that far.
-
 #if DEBUG
     private readonly VirtualGamepad _debugVirtualGamepad = new();
 
@@ -106,8 +102,6 @@ public partial class MainWindow : Window
             _ = PerformAsyncUpdateCheck();
 
         Opened += MainWindow_Opened;
-
-
     }
 
     private bool IsVCRuntimeInstalled()
@@ -134,10 +128,7 @@ public partial class MainWindow : Window
         foreach (var mask in Enum.GetValues<TomodachiLifeMask>().Cast<TomodachiLifeMask>())
         {
             var desc = mask.GetDescription();
-            var menuItem = new MenuItem()
-            {
-                Header = desc
-            };
+            var menuItem = new MenuItem() { Header = desc };
             menuItem.Click += (s, e) => OpenTemplate(mask);
             MenuTemplates.Items.Add(menuItem);
         }
@@ -156,8 +147,13 @@ public partial class MainWindow : Window
             }
             else if (templateOutput.CouldNotLoad)
             {
-                AppendLog($"Template editor failed to load the template for {mask.GetDescription()}");
-                _ = ShowMessageAsync("Error loading template", "The template tool could not find the image. This REALLY shouldn't happen... Try reinstalling?");
+                AppendLog(
+                    $"Template editor failed to load the template for {mask.GetDescription()}"
+                );
+                _ = ShowMessageAsync(
+                    "Error loading template",
+                    "The template tool could not find the image. This REALLY shouldn't happen... Try reinstalling?"
+                );
             }
             else
             {
@@ -187,9 +183,9 @@ public partial class MainWindow : Window
         {
             await ShowMessageAsync(
                 "WARNING: MISSING LIBRARIES",
-                $"In order for this program to run, you MUST install the VC Redistributable." +
-                $"\n\nClick the open link button to install it. " +
-                $"If you do not install it, this program will probably crash silently.",
+                $"In order for this program to run, you MUST install the VC Redistributable."
+                    + $"\n\nClick the open link button to install it. "
+                    + $"If you do not install it, this program will probably crash silently.",
                 new Uri("https://aka.ms/vc14/vc_redist.x64.exe"),
                 "Download Redistributable"
             );
@@ -199,16 +195,17 @@ public partial class MainWindow : Window
     // Welcome message stuff. For important changes, the ID is incremented by one by hand whenever something notable changes.
     // This is only really needed for Mac since its settings are saved in a way that persists more readily.
     private const int CURRENT_WELCOME_ID = 3;
+
     private async void ShowWelcomeMessage()
     {
         await ShowMessageAsync(
             "Welcome to TomodachiDrawer V2",
             "This is TomodachiDrawer V2 — a fork by @xoaninc that adds ESP32-S3 support "
-            + "(alongside the original RP2040) plus fixes, based on the original by @Lucas7yoshi.\n\n"
-            + "New: the left panel has an \"ESP32-S3 Output\" section to flash an ESP32-S3 and "
-            + "draw on your Switch. Press \"Setup Steps (ESP32)\" there for a full guide.\n\n"
-            + "Free software under GPL-3.0; the original project's credit is preserved. "
-            + "Use Help → Open GitHub Repo for this V2 project."
+                + "(alongside the original RP2040) plus fixes, based on the original by @Lucas7yoshi.\n\n"
+                + "New: the left panel has an \"ESP32-S3 Output\" section to flash an ESP32-S3 and "
+                + "draw on your Switch. Press \"Setup Steps (ESP32)\" there for a full guide.\n\n"
+                + "Free software under GPL-3.0; the original project's credit is preserved. "
+                + "Use Help → Open GitHub Repo for this V2 project."
         );
     }
 
@@ -241,16 +238,10 @@ public partial class MainWindow : Window
 #if DEBUG
     private void InsertDebugMenuItems()
     {
-        var debugMenuItem = new MenuItem()
-        {
-            Header = "_Debug",
-        };
+        var debugMenuItem = new MenuItem() { Header = "_Debug" };
         Menu.Items.Add(debugMenuItem);
 
-        MenuDebugConnectVirtualGamepad = new MenuItem()
-        {
-            Header = "_Connect Virtual Gamepad",
-        };
+        MenuDebugConnectVirtualGamepad = new MenuItem() { Header = "_Connect Virtual Gamepad" };
         MenuDebugConnectVirtualGamepad.Click += MenuDebugConnectVirtualGamepad_Click;
         debugMenuItem.Items.Add(MenuDebugConnectVirtualGamepad);
 
@@ -355,7 +346,9 @@ public partial class MainWindow : Window
                         + "Please open System Settings -> Privacy & Security -> Files & Folders, find \"TomodachiDrawer\", and make sure \"Removable Volumes\" is enabled.\n\n"
                         + "This is required for the app to write the firmware directly to your RPI-RP2 drive.\r"
                         + $"Or you can manually copy the .uf2 file to {drivePath} if you want to avoid granting permissions.",
-                    new Uri("x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders"),
+                    new Uri(
+                        "x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders"
+                    ),
                     "Open System Settings"
                 );
             }
@@ -394,8 +387,18 @@ public partial class MainWindow : Window
                         // .tdld needs no microcontroller — an image is enough.
                         ExportTDLDButton.IsEnabled = hasImage && !BusyExporting;
 
-                        lastRp2040 = UpdateChipUI(RPChipType.RP2040, rp2040Path, hasImage, lastRp2040);
-                        lastRp2350 = UpdateChipUI(RPChipType.RP2350, rp2350Path, hasImage, lastRp2350);
+                        lastRp2040 = UpdateChipUI(
+                            RPChipType.RP2040,
+                            rp2040Path,
+                            hasImage,
+                            lastRp2040
+                        );
+                        lastRp2350 = UpdateChipUI(
+                            RPChipType.RP2350,
+                            rp2350Path,
+                            hasImage,
+                            lastRp2350
+                        );
                     });
 
                     await Task.Delay(1000, _cts.Token);
@@ -419,8 +422,20 @@ public partial class MainWindow : Window
     {
         var (statusLabel, flashButton, exportButton, exportUf2Button, chipName) =
             chip == RPChipType.RP2350
-                ? (RP2350StatusLabel, RP2350FlashButton, RP2350ExportButton, RP2350ExportUF2Button, "RP2350")
-                : (RP2040StatusLabel, RP2040FlashButton, RP2040ExportButton, RP2040ExportUF2Button, "RP2040");
+                ? (
+                    RP2350StatusLabel,
+                    RP2350FlashButton,
+                    RP2350ExportButton,
+                    RP2350ExportUF2Button,
+                    "RP2350"
+                )
+                : (
+                    RP2040StatusLabel,
+                    RP2040FlashButton,
+                    RP2040ExportButton,
+                    RP2040ExportUF2Button,
+                    "RP2040"
+                );
 
         // Export-to-.UF2 only needs an image — no device required.
         exportUf2Button.IsEnabled = hasImage && !BusyExporting;
@@ -470,8 +485,14 @@ public partial class MainWindow : Window
             while (!_cts.Token.IsCancellationRequested)
             {
                 string[] ports;
-                try { ports = SerialPort.GetPortNames().Distinct().OrderBy(p => p).ToArray(); }
-                catch { ports = Array.Empty<string>(); }
+                try
+                {
+                    ports = SerialPort.GetPortNames().Distinct().OrderBy(p => p).ToArray();
+                }
+                catch
+                {
+                    ports = Array.Empty<string>();
+                }
 
                 await Dispatcher.UIThread.InvokeAsync(() =>
                 {
@@ -491,12 +512,14 @@ public partial class MainWindow : Window
                     bool portSelected = ESP32PortComboBox.SelectedItem is string;
                     if (ports.Length > 0)
                     {
-                        ESP32StatusLabel.Text = $"ESP32: {ports.Length} serial port(s) — pick the one in download mode";
+                        ESP32StatusLabel.Text =
+                            $"ESP32: {ports.Length} serial port(s) — pick the one in download mode";
                         ESP32StatusLabel.Foreground = Brushes.Green;
                     }
                     else
                     {
-                        ESP32StatusLabel.Text = "ESP32 not found — hold BOOT, tap RESET, release BOOT";
+                        ESP32StatusLabel.Text =
+                            "ESP32 not found — hold BOOT, tap RESET, release BOOT";
                         ESP32StatusLabel.Foreground = Brushes.Red;
                     }
 
@@ -504,8 +527,14 @@ public partial class MainWindow : Window
                     ExportEsp32Button.IsEnabled = portSelected && hasImage && !BusyExporting;
                 });
 
-                try { await Task.Delay(1000, _cts.Token); }
-                catch (System.OperationCanceledException) { break; }
+                try
+                {
+                    await Task.Delay(1000, _cts.Token);
+                }
+                catch (System.OperationCanceledException)
+                {
+                    break;
+                }
             }
         });
     }
@@ -514,7 +543,10 @@ public partial class MainWindow : Window
     {
         if (ESP32PortComboBox.SelectedItem is not string port)
         {
-            _ = ShowMessageAsync("ESP32", "Select the ESP32 serial port first. The board must be in download mode (hold BOOT, tap RESET, release BOOT).");
+            _ = ShowMessageAsync(
+                "ESP32",
+                "Select the ESP32 serial port first. The board must be in download mode (hold BOOT, tap RESET, release BOOT)."
+            );
             return;
         }
 
@@ -546,7 +578,10 @@ public partial class MainWindow : Window
             {
                 cancelled = true;
             }
-            catch (Exception ex) { error = ex.Message; }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+            }
         });
 
         BusyExporting = false;
@@ -562,7 +597,9 @@ public partial class MainWindow : Window
         }
         else
         {
-            AppendLog("Flashed ESP32-S3 base firmware. Board is still in download mode — you can Export now.\r\n");
+            AppendLog(
+                "Flashed ESP32-S3 base firmware. Board is still in download mode — you can Export now.\r\n"
+            );
             _ = ShowMessageAsync(
                 "Done",
                 "ESP32-S3 base firmware flashed!\n\n"
@@ -581,7 +618,10 @@ public partial class MainWindow : Window
 
         if (ESP32PortComboBox.SelectedItem is not string port)
         {
-            _ = ShowMessageAsync("ESP32", "Select the ESP32 serial port first. The board must be in download mode (hold BOOT, tap RESET, release BOOT).");
+            _ = ShowMessageAsync(
+                "ESP32",
+                "Select the ESP32 serial port first. The board must be in download mode (hold BOOT, tap RESET, release BOOT)."
+            );
             return;
         }
 
@@ -609,16 +649,26 @@ public partial class MainWindow : Window
             try
             {
                 using var img = imageSnapshot;
-                var (tdldBytes, time) = await GetTdldAsync(img, drawSettings, _currentSettings.SelectedSwitchVersion, token);
+                var (tdldBytes, time) = await GetTdldAsync(
+                    img,
+                    drawSettings,
+                    _currentSettings.SelectedSwitchVersion,
+                    token
+                );
                 totalTime = time;
-                AppendLog($"Flashing {tdldBytes.Length} bytes to the ESP32-S3 tdld partition via {port} ...");
+                AppendLog(
+                    $"Flashing {tdldBytes.Length} bytes to the ESP32-S3 tdld partition via {port} ..."
+                );
                 await EspFlasher.FlashTdldAsync(port, tdldBytes, null, _cts.Token, AppendLog);
             }
             catch (OperationCanceledException)
             {
                 cancelled = true;
             }
-            catch (Exception ex) { error = ex.Message; }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+            }
         });
 
         BusyExporting = false;
@@ -699,7 +749,9 @@ public partial class MainWindow : Window
 
         if (img.Width == 256 && img.Height == 256)
         {
-            AppendLog("Image is full canvas size, so enabling auto home by default.\nYou can disable it if it causes you trouble and manually home before connecting.");
+            AppendLog(
+                "Image is full canvas size, so enabling auto home by default.\nYou can disable it if it causes you trouble and manually home before connecting."
+            );
             EnableHomeCanvas.IsChecked = true;
         }
 
@@ -915,13 +967,23 @@ public partial class MainWindow : Window
             await Task.Run(async () =>
             {
                 using var img = imageSnapshot;
-                var (tdldBytes, time) = await GetTdldAsync(img, drawSettings, _currentSettings.SelectedSwitchVersion, token);
+                var (tdldBytes, time) = await GetTdldAsync(
+                    img,
+                    drawSettings,
+                    _currentSettings.SelectedSwitchVersion,
+                    token
+                );
                 totalTime = time;
 
                 var uf2Bytes = UF2Flasher.BuildTDLDUF2(tdldBytes, chip);
                 var drivePath = UF2Flasher.FindDriveForChip(chip);
 
-                if (uf2Bytes != null && uf2Bytes.Length > 0 && drivePath != null && CanAccessRP2040Drive(drivePath))
+                if (
+                    uf2Bytes != null
+                    && uf2Bytes.Length > 0
+                    && drivePath != null
+                    && CanAccessRP2040Drive(drivePath)
+                )
                 {
                     File.WriteAllBytes(Path.Combine(drivePath, "tdld_image.uf2"), uf2Bytes);
                     AppendLog(
@@ -1098,15 +1160,20 @@ public partial class MainWindow : Window
     // if the inputs are byte-for-byte identical to the last generation. Runs the
     // (slow) route generation only on a cache miss. Call from a background thread.
     private async Task<(byte[] tdld, TimeSpan time)> GetTdldAsync(
-        SKBitmap img, DrawImageSettings settings, SwitchVersion ver,
-        CancellationToken cancellationToken = default)
+        SKBitmap img,
+        DrawImageSettings settings,
+        SwitchVersion ver,
+        CancellationToken cancellationToken = default
+    )
     {
         var fingerprint = ComputeFingerprint(img, settings, ver);
         lock (_cacheLock)
         {
             if (fingerprint == _cachedFingerprint && _cachedTdld != null)
             {
-                AppendLog("Reusing cached route (image and settings unchanged) — no re-generation needed.");
+                AppendLog(
+                    "Reusing cached route (image and settings unchanged) — no re-generation needed."
+                );
                 return (_cachedTdld, _cachedTime);
             }
         }
@@ -1126,7 +1193,13 @@ public partial class MainWindow : Window
         timingSink.ReplayTo(fileSink);
         fileSink.Dispose();
         var bytes = File.ReadAllBytes(tempPath);
-        try { File.Delete(tempPath); } catch { /* best effort */ }
+        try
+        {
+            File.Delete(tempPath);
+        }
+        catch
+        { /* best effort */
+        }
 
         lock (_cacheLock)
         {
@@ -1169,14 +1242,22 @@ public partial class MainWindow : Window
             try
             {
                 using var img = imageSnapshot;
-                var (_, time) = await GetTdldAsync(img, drawSettings, _currentSettings.SelectedSwitchVersion, token);
+                var (_, time) = await GetTdldAsync(
+                    img,
+                    drawSettings,
+                    _currentSettings.SelectedSwitchVersion,
+                    token
+                );
                 totalTime = time;
             }
             catch (OperationCanceledException)
             {
                 cancelled = true;
             }
-            catch (Exception ex) { error = ex.Message; }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+            }
         });
 
         BusyExporting = false;
@@ -1232,7 +1313,8 @@ public partial class MainWindow : Window
             return;
 
         var chip = sender == RP2350ExportUF2Button ? RPChipType.RP2350 : RPChipType.RP2040;
-        var exportUf2Button = chip == RPChipType.RP2350 ? RP2350ExportUF2Button : RP2040ExportUF2Button;
+        var exportUf2Button =
+            chip == RPChipType.RP2350 ? RP2350ExportUF2Button : RP2040ExportUF2Button;
 
         var imageSnapshot = _currentImage!.Copy();
         var drawSettings = GetDrawImageSettings();
@@ -1249,7 +1331,12 @@ public partial class MainWindow : Window
             await Task.Run(async () =>
             {
                 using var img = imageSnapshot;
-                var (tdldBytes, time) = await GetTdldAsync(img, drawSettings, _currentSettings.SelectedSwitchVersion, token);
+                var (tdldBytes, time) = await GetTdldAsync(
+                    img,
+                    drawSettings,
+                    _currentSettings.SelectedSwitchVersion,
+                    token
+                );
                 totalTime = time;
 
                 var uf2Bytes = UF2Flasher.BuildTDLDUF2(tdldBytes, chip);
@@ -1451,7 +1538,10 @@ public partial class MainWindow : Window
 
     private void ThemeMenuItem_Click(object? sender, RoutedEventArgs e)
     {
-        int index = sender == ThemeLightMenuItem ? 1 : sender == ThemeDarkMenuItem ? 2 : 0;
+        int index =
+            sender == ThemeLightMenuItem ? 1
+            : sender == ThemeDarkMenuItem ? 2
+            : 0;
         ThemeSystemMenuItem.IsChecked = index == 0;
         ThemeLightMenuItem.IsChecked = index == 1;
         ThemeDarkMenuItem.IsChecked = index == 2;
@@ -1644,7 +1734,8 @@ public partial class MainWindow : Window
             MenuDebugConnectVirtualGamepad == null
             || MenuDebugRunInVirtualGamepad == null
             || MenuDebugOpenVirtualGamepadController == null
-        ) return;
+        )
+            return;
 
         if (!_debugVirtualGamepad.CheckDriver())
         {
@@ -1679,10 +1770,7 @@ public partial class MainWindow : Window
 
         if (string.IsNullOrEmpty(_currentImagePath))
         {
-            _ = ShowMessageAsync(
-                "No image selected",
-                "Select an image first."
-            );
+            _ = ShowMessageAsync("No image selected", "Select an image first.");
             return;
         }
 
@@ -1690,7 +1778,9 @@ public partial class MainWindow : Window
         var drawSettings = GetDrawImageSettings();
         var token = BeginGeneration();
 
-        AppendLog("Starting to draw with the Virtual Gamepad. Keep focus on the window you want to draw on for the duration of the drawing.");
+        AppendLog(
+            "Starting to draw with the Virtual Gamepad. Keep focus on the window you want to draw on for the duration of the drawing."
+        );
 
         await Task.Run(async () =>
         {
@@ -1711,10 +1801,7 @@ public partial class MainWindow : Window
         if (!_debugVirtualGamepad.IsConnected)
             return;
 
-        var window = new VirtualGamepadControllerWindow
-        {
-            VirtualGamepad = _debugVirtualGamepad
-        };
+        var window = new VirtualGamepadControllerWindow { VirtualGamepad = _debugVirtualGamepad };
         window.Show(this);
     }
 #endif
@@ -1747,9 +1834,11 @@ public partial class MainWindow : Window
         Close();
     }
 
-    private void MenuHelpOpenWelcome_Click(object? sender, RoutedEventArgs e) => ShowWelcomeMessage();
+    private void MenuHelpOpenWelcome_Click(object? sender, RoutedEventArgs e) =>
+        ShowWelcomeMessage();
 
-    private void MenuHelpCheckForUpdate_Click(object? sender, RoutedEventArgs e) => _ = PerformAsyncUpdateCheck();
+    private void MenuHelpCheckForUpdate_Click(object? sender, RoutedEventArgs e) =>
+        _ = PerformAsyncUpdateCheck();
 
     private void EnableHomeCanvas_IsCheckedChanged(object? sender, RoutedEventArgs e)
     {

@@ -87,11 +87,7 @@ namespace TomodachiDrawer.Bench
         // so TotalMilliseconds can be cross-checked against it.
         void ISwitchOutput.Tap(Button btn, double holdDuration, double releaseDuration)
         {
-            if (
-                btn == Button.A
-                && holdDuration == DefaultHold
-                && releaseDuration == DefaultRelease
-            )
+            if (btn == Button.A && holdDuration == DefaultHold && releaseDuration == DefaultRelease)
                 PaintActions++; // isolated fine-detail point, a stamp, or a bucket click
             TotalMilliseconds += holdDuration + releaseDuration;
         }

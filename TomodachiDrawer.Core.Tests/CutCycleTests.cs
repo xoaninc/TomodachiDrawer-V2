@@ -36,10 +36,7 @@ namespace TomodachiDrawer.Core.Tests
         )
         {
             var order = CanvasDrawer.ApplyCut(route, cutIndex, forward);
-            long taps = Math.Max(
-                Math.Abs(cursorX - order[0].X),
-                Math.Abs(cursorY - order[0].Y)
-            );
+            long taps = Math.Max(Math.Abs(cursorX - order[0].X), Math.Abs(cursorY - order[0].Y));
             for (int i = 0; i + 1 < order.Count; i++)
                 taps += Cheb(order[i], order[i + 1]);
 
@@ -121,8 +118,8 @@ namespace TomodachiDrawer.Core.Tests
 
                 long best = long.MaxValue;
                 for (int j = 0; j < route.Count; j++)
-                foreach (bool f in new[] { true, false })
-                    best = Math.Min(best, EmissionTaps(route, j, f, cursor, cursor, holdsA));
+                    foreach (bool f in new[] { true, false })
+                        best = Math.Min(best, EmissionTaps(route, j, f, cursor, cursor, holdsA));
 
                 Assert.Equal(best, chosen);
             }
@@ -143,8 +140,8 @@ namespace TomodachiDrawer.Core.Tests
 
                 long best = long.MaxValue;
                 for (int j = 0; j < route.Count; j++)
-                foreach (bool f in new[] { true, false })
-                    best = Math.Min(best, EmissionTaps(route, j, f, 0, 0, holdsA));
+                    foreach (bool f in new[] { true, false })
+                        best = Math.Min(best, EmissionTaps(route, j, f, 0, 0, holdsA));
 
                 Assert.Equal(best, chosen);
             }
@@ -159,14 +156,14 @@ namespace TomodachiDrawer.Core.Tests
         {
             var route = Scatter(count, count * 7);
             for (int j = 0; j < count; j++)
-            foreach (bool forward in new[] { true, false })
-            {
-                var order = CanvasDrawer.ApplyCut(route, j, forward);
-                Assert.Equal(route.Count, order.Count);
-                var expected = route.GroupBy(p => p).ToDictionary(g => g.Key, g => g.Count());
-                var actual = order.GroupBy(p => p).ToDictionary(g => g.Key, g => g.Count());
-                Assert.Equal(expected, actual);
-            }
+                foreach (bool forward in new[] { true, false })
+                {
+                    var order = CanvasDrawer.ApplyCut(route, j, forward);
+                    Assert.Equal(route.Count, order.Count);
+                    var expected = route.GroupBy(p => p).ToDictionary(g => g.Key, g => g.Count());
+                    var actual = order.GroupBy(p => p).ToDictionary(g => g.Key, g => g.Count());
+                    Assert.Equal(expected, actual);
+                }
         }
 
         /// <summary>
@@ -189,8 +186,8 @@ namespace TomodachiDrawer.Core.Tests
                 long chosen = EmissionTaps(route, choice.CutIndex, choice.Forward, 0, 0, holdsA);
                 long best = long.MaxValue;
                 for (int j = 0; j < route.Count; j++)
-                foreach (bool f in new[] { true, false })
-                    best = Math.Min(best, EmissionTaps(route, j, f, 0, 0, holdsA));
+                    foreach (bool f in new[] { true, false })
+                        best = Math.Min(best, EmissionTaps(route, j, f, 0, 0, holdsA));
                 Assert.Equal(best, chosen);
             }
         }

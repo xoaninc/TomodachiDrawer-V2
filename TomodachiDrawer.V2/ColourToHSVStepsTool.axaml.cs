@@ -1,7 +1,5 @@
 using Avalonia.Controls;
-
 using SkiaSharp;
-
 using TomodachiDrawer.Core;
 
 namespace TomodachiDrawer.UI.Avalonia;
@@ -17,12 +15,14 @@ public partial class ColourToHSVStepsTool : Window
     {
         if (!SKColor.TryParse(ColourHex.Text, out var skColor))
             return;
-        
+
         var (HueSteps, SatSteps, ValSteps) = ColourPickerRouter.FromColour(skColor);
 
         if (HueSteps > ColourPickerRouter.FCR_HUE_SLIDER_STEP_COUNT / 2)
         {
-            HueStepsOutput.Text = ((ColourPickerRouter.FCR_HUE_SLIDER_STEP_COUNT - 1) - HueSteps).ToString();
+            HueStepsOutput.Text = (
+                (ColourPickerRouter.FCR_HUE_SLIDER_STEP_COUNT - 1) - HueSteps
+            ).ToString();
             HueStepsOutput.InnerRightContent = "ZL taps";
         }
         else
@@ -33,7 +33,9 @@ public partial class ColourToHSVStepsTool : Window
 
         if (SatSteps > ColourPickerRouter.FCR_SATURATION_STEP_COUNT / 2)
         {
-            SatStepsOutput.Text = ((ColourPickerRouter.FCR_SATURATION_STEP_COUNT - 1) - SatSteps).ToString();
+            SatStepsOutput.Text = (
+                (ColourPickerRouter.FCR_SATURATION_STEP_COUNT - 1) - SatSteps
+            ).ToString();
             SatStepsOutput.InnerRightContent = "right taps";
         }
         else
@@ -44,7 +46,9 @@ public partial class ColourToHSVStepsTool : Window
 
         if (ValSteps > ColourPickerRouter.FCR_VALUE_STEP_COUNT / 2)
         {
-            ValStepsOutput.Text = ((ColourPickerRouter.FCR_VALUE_STEP_COUNT - 1) - ValSteps).ToString();
+            ValStepsOutput.Text = (
+                (ColourPickerRouter.FCR_VALUE_STEP_COUNT - 1) - ValSteps
+            ).ToString();
             ValStepsOutput.InnerRightContent = "up taps";
         }
         else

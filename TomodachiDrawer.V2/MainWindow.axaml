@@ -169,6 +169,13 @@
 								  ToolTip.Tip="At the beginning, the program will zoom out, and set itself at the very very top left of the canvas. This is automatically checked for full size (256x256) images."
 								  IsCheckedChanged="EnableHomeCanvas_IsCheckedChanged"
 						/>
+						<Button x:Name="CancelDrawButton"
+								Content="Cancel Generation"
+								IsEnabled="False"
+								ToolTip.Tip="Stops the route generation in progress. Only affects generation on this computer — it cannot stop a drawing already running on the Switch."
+								HorizontalAlignment="Stretch"
+								Margin="0,6,0,0"
+								Click="CancelDrawButton_Click" />
 						<CheckBox x:Name="ReverseColourOrderCheckBox"
 								  Content="Reverse Colour Order"
 								  ToolTip.Tip="Draws the colour layers in the opposite order. Useful if a later layer keeps covering an earlier one in a way you do not want."

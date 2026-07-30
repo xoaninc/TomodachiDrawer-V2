@@ -64,7 +64,11 @@ namespace TomodachiDrawer.Core
             _switchVersion = switchVersion;
         }
 
-        public async Task DrawImage(SKBitmap image, DrawImageSettings settings)
+        public async Task DrawImage(
+            SKBitmap image,
+            DrawImageSettings settings,
+            CancellationToken cancellationToken = default
+        )
         {
             if (image.Width > CanvasWidth || image.Height > CanvasHeight)
                 throw new InvalidDataException(
@@ -211,7 +215,9 @@ namespace TomodachiDrawer.Core
             // PARALLEL PRE-SOLVE: with all layers/phases now fixed, solve every (independent) TSP
             // concurrently before the serial emission. Null when not enabled → emission solves
             // inline as before. See BuildPreRoutes.
-            var preRoutes = _parallelSolves ? BuildPreRoutes(layers, settings) : null;
+            var preRoutes = _parallelSolves
+                ? BuildPreRoutes(layers, settings, cancellationToken)
+                : null;
 
             double totalInLayerTime = 0.0;
 
@@ -220,6 +226,7 @@ namespace TomodachiDrawer.Core
             int layerNumber = 0;
             foreach (var l in layers)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 layerNumber++;
 
                 _palette.SelectColour(l.Colour, 25.0);
@@ -875,7 +882,8 @@ namespace TomodachiDrawer.Core
         /// </summary>
         private Dictionary<(int, RoutingPhaseKind, int), List<CanvasPoint>> BuildPreRoutes(
             List<ColourLayer> layers,
-            DrawImageSettings settings
+            DrawImageSettings settings,
+            CancellationToken cancellationToken
         )
         {
             var keys = new List<(int, RoutingPhaseKind, int)>();
@@ -929,7 +937,13 @@ namespace TomodachiDrawer.Core
             Parallel.For(
                 0,
                 keys.Count,
-                new ParallelOptions { MaxDegreeOfParallelism = threadCount },
+                new ParallelOptions
+                {
+                    MaxDegreeOfParallelism = threadCount,
+                    // Upstream only checks the token between layers. For V2 that is nearly useless:
+                    // this pre-solve runs BEFORE the layer loop and is where generation time goes.
+                    CancellationToken = cancellationToken,
+                },
                 i =>
                 {
                     try

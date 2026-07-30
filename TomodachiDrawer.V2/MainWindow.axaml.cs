@@ -40,6 +40,13 @@ public partial class MainWindow : Window
 
     private bool BusyExporting = false;
 
+    /// <summary>
+    /// Cancels the in-progress route generation. Separate from <c>_cts</c> on purpose: that one is
+    /// window-lifetime, is cancelled on close, and feeds the serial-port polling loops and the
+    /// ESP32 flasher — cancelling a draw through it would stop port detection for the session.
+    /// </summary>
+    private CancellationTokenSource? _generationCts;
+
     // Cached generated route, reused across Estimate/Export when nothing changed.
     // Keyed by a fingerprint of (image pixels + draw settings + Switch version).
     private byte[]? _cachedTdld;
@@ -526,17 +533,27 @@ public partial class MainWindow : Window
         AppendLog($"Flashing ESP32-S3 base firmware via {port} ...");
 
         string? error = null;
+        bool cancelled = false;
         await Task.Run(async () =>
         {
             try
             {
                 await EspFlasher.FlashBaseFirmwareAsync(port, bytes, null, _cts.Token, AppendLog);
             }
+            catch (OperationCanceledException)
+            {
+                cancelled = true;
+            }
             catch (Exception ex) { error = ex.Message; }
         });
 
         BusyExporting = false;
-        if (error != null)
+        EndGeneration();
+        if (cancelled)
+        {
+            AppendLog("Generation cancelled.");
+        }
+        else if (error != null)
         {
             AppendLog($"ESP32 base firmware flash failed: {error}");
             _ = ShowMessageAsync("ESP32 flash failed", error);
@@ -577,29 +594,40 @@ public partial class MainWindow : Window
 
         var imageSnapshot = _currentImage!.Copy();
         var drawSettings = GetDrawImageSettings();
+        var token = BeginGeneration();
 
         BusyExporting = true;
         ExportEsp32Button.IsEnabled = false;
         TimeSpan totalTime = TimeSpan.MaxValue;
         string? error = null;
+        bool cancelled = false;
 
         await Task.Run(async () =>
         {
             try
             {
                 using var img = imageSnapshot;
-                var (tdldBytes, time) = await GetTdldAsync(img, drawSettings, _currentSettings.SelectedSwitchVersion);
+                var (tdldBytes, time) = await GetTdldAsync(img, drawSettings, _currentSettings.SelectedSwitchVersion, token);
                 totalTime = time;
                 AppendLog($"Flashing {tdldBytes.Length} bytes to the ESP32-S3 tdld partition via {port} ...");
                 await EspFlasher.FlashTdldAsync(port, tdldBytes, null, _cts.Token, AppendLog);
+            }
+            catch (OperationCanceledException)
+            {
+                cancelled = true;
             }
             catch (Exception ex) { error = ex.Message; }
         });
 
         BusyExporting = false;
+        EndGeneration();
         ExportEsp32Button.IsEnabled = true;
 
-        if (error != null)
+        if (cancelled)
+        {
+            AppendLog("Generation cancelled.");
+        }
+        else if (error != null)
         {
             AppendLog($"ESP32 export failed: {error}");
             _ = ShowMessageAsync("ESP32 export failed", error);
@@ -872,6 +900,7 @@ public partial class MainWindow : Window
 
         var imageSnapshot = _currentImage!.Copy();
         var drawSettings = GetDrawImageSettings();
+        var token = BeginGeneration();
 
         BusyExporting = true;
         exportButton.IsEnabled = false;
@@ -884,7 +913,7 @@ public partial class MainWindow : Window
             await Task.Run(async () =>
             {
                 using var img = imageSnapshot;
-                var (tdldBytes, time) = await GetTdldAsync(img, drawSettings, _currentSettings.SelectedSwitchVersion);
+                var (tdldBytes, time) = await GetTdldAsync(img, drawSettings, _currentSettings.SelectedSwitchVersion, token);
                 totalTime = time;
 
                 var uf2Bytes = UF2Flasher.BuildTDLDUF2(tdldBytes, chip);
@@ -899,6 +928,10 @@ public partial class MainWindow : Window
                 }
             });
         }
+        catch (OperationCanceledException)
+        {
+            AppendLog("Generation cancelled.");
+        }
         catch (Exception ex)
         {
             AppendLog($"{chip} export failed: {ex.Message}");
@@ -906,6 +939,7 @@ public partial class MainWindow : Window
         finally
         {
             BusyExporting = false;
+            EndGeneration();
             exportButton.IsEnabled = true;
         }
 
@@ -935,6 +969,35 @@ public partial class MainWindow : Window
         };
     }
 
+    /// <summary>
+    /// Starts a cancellable generation and enables the Cancel button. Any previous source is
+    /// disposed — generations are serialised by BusyExporting, so there is never more than one.
+    /// </summary>
+    private CancellationToken BeginGeneration()
+    {
+        _generationCts?.Dispose();
+        _generationCts = new CancellationTokenSource();
+        CancelDrawButton.IsEnabled = true;
+        return _generationCts.Token;
+    }
+
+    private void EndGeneration()
+    {
+        CancelDrawButton.IsEnabled = false;
+        _generationCts?.Dispose();
+        _generationCts = null;
+    }
+
+    private void CancelDrawButton_Click(object? sender, RoutedEventArgs e)
+    {
+        if (_generationCts is { IsCancellationRequested: false })
+        {
+            AppendLog("Cancelling route generation…");
+            _generationCts.Cancel();
+            CancelDrawButton.IsEnabled = false;
+        }
+    }
+
     private void SetEstimate(TimeSpan time)
     {
         var estimateStr = $"{time:h\\hm\\ms\\s}";
@@ -953,7 +1016,8 @@ public partial class MainWindow : Window
     // if the inputs are byte-for-byte identical to the last generation. Runs the
     // (slow) route generation only on a cache miss. Call from a background thread.
     private async Task<(byte[] tdld, TimeSpan time)> GetTdldAsync(
-        SKBitmap img, DrawImageSettings settings, SwitchVersion ver)
+        SKBitmap img, DrawImageSettings settings, SwitchVersion ver,
+        CancellationToken cancellationToken = default)
     {
         var fingerprint = ComputeFingerprint(img, settings, ver);
         lock (_cacheLock)
@@ -974,7 +1038,7 @@ public partial class MainWindow : Window
         // faster generation). The emitted .tdld is equivalent (route order differs, coverage same).
         var drawer = new CanvasDrawer(timingSink, ver, AppendLog, parallelSolves: true);
         drawer.ConnectAndConfirmController();
-        await drawer.DrawImage(img, settings);
+        await drawer.DrawImage(img, settings, cancellationToken);
 
         var fileSink = new FileControllerSink(tempPath);
         timingSink.ReplayTo(fileSink);
@@ -1009,28 +1073,39 @@ public partial class MainWindow : Window
 
         var imageSnapshot = _currentImage!.Copy();
         var drawSettings = GetDrawImageSettings();
+        var token = BeginGeneration();
 
         BusyExporting = true;
         EstimateButton.IsEnabled = false;
         DrawTimeLabel.Text = "Draw Time Estimate: estimating…";
         TimeSpan totalTime = TimeSpan.MaxValue;
         string? error = null;
+        bool cancelled = false;
 
         await Task.Run(async () =>
         {
             try
             {
                 using var img = imageSnapshot;
-                var (_, time) = await GetTdldAsync(img, drawSettings, _currentSettings.SelectedSwitchVersion);
+                var (_, time) = await GetTdldAsync(img, drawSettings, _currentSettings.SelectedSwitchVersion, token);
                 totalTime = time;
+            }
+            catch (OperationCanceledException)
+            {
+                cancelled = true;
             }
             catch (Exception ex) { error = ex.Message; }
         });
 
         BusyExporting = false;
+        EndGeneration();
         EstimateButton.IsEnabled = true;
 
-        if (error != null)
+        if (cancelled)
+        {
+            AppendLog("Generation cancelled.");
+        }
+        else if (error != null)
         {
             AppendLog($"Estimate failed: {error}");
             DrawTimeLabel.Text = "Draw Time Estimate: ???";
@@ -1079,6 +1154,7 @@ public partial class MainWindow : Window
 
         var imageSnapshot = _currentImage!.Copy();
         var drawSettings = GetDrawImageSettings();
+        var token = BeginGeneration();
 
         exportUf2Button.IsEnabled = false;
         BusyExporting = true;
@@ -1091,7 +1167,7 @@ public partial class MainWindow : Window
             await Task.Run(async () =>
             {
                 using var img = imageSnapshot;
-                var (tdldBytes, time) = await GetTdldAsync(img, drawSettings, _currentSettings.SelectedSwitchVersion);
+                var (tdldBytes, time) = await GetTdldAsync(img, drawSettings, _currentSettings.SelectedSwitchVersion, token);
                 totalTime = time;
 
                 var uf2Bytes = UF2Flasher.BuildTDLDUF2(tdldBytes, chip);
@@ -1102,6 +1178,10 @@ public partial class MainWindow : Window
                 }
             });
         }
+        catch (OperationCanceledException)
+        {
+            AppendLog("Generation cancelled.");
+        }
         catch (Exception ex)
         {
             AppendLog($"UF2 export failed: {ex.Message}");
@@ -1110,6 +1190,7 @@ public partial class MainWindow : Window
         {
             exportUf2Button.IsEnabled = true;
             BusyExporting = false;
+            EndGeneration();
         }
 
         SetEstimate(totalTime);
@@ -1525,6 +1606,7 @@ public partial class MainWindow : Window
 
         var imageSnapshot = _currentImage!.Copy();
         var drawSettings = GetDrawImageSettings();
+        var token = BeginGeneration();
 
         AppendLog("Starting to draw with the Virtual Gamepad. Keep focus on the window you want to draw on for the duration of the drawing.");
 

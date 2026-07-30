@@ -841,7 +841,12 @@ namespace TomodachiDrawer.Core
             }
             else
             {
-                var solved = PerformTSP(pointsList, timeLimitSeconds, out _);
+                var solved = PerformTSP(
+                    pointsList,
+                    timeLimitSeconds,
+                    out _,
+                    holdsAAcrossAdjacent: true
+                );
                 if (solved == null)
                     _log($"\tTSP timed out. Performing naive routing for TSP instead...");
                 optimizedRoute = solved ?? NearestNeighbourRoute(pointsList);

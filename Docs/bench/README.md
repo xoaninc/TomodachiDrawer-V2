@@ -72,6 +72,29 @@ One coverage number moved from 32068 to 32069 on `mosaic256`, which is the Stage
 (`CanonicalKey`) changing which colours collapse and therefore the bucket-fill choice by one
 action. It is identical across all three arms in that run, which is the invariant that matters.
 
+## The optimal cut also improves the *serial* path
+
+Measured 2026-07-30 (tsp=1.0s, 32 colours, best of 2). Applying the cut inside `PerformTSP`, with
+no parallelism involved at all:
+
+| Image | Serial, OrTools' own cut | Serial, best of 2n cuts | Pen travel | Draw time |
+|---|---|---|---|---|
+| `grid64` | 2503 | **2436** | −2.7 % | 245.3 s → 241.7 s |
+| `rings128` | 16696 | **15892** | −4.8 % | 1255.5 s → 1215.1 s |
+| `mosaic256` | 117464 | **113965** | −3.0 % | 7312.7 s → 7136.4 s |
+
+Why it works: OrTools writes the cycle out starting at the depot, so the arc it drops is whichever
+one happens to sit there — 1 of n candidates, chosen without reference to how long that arc is. The
+objective is a closed cycle, so its cost is rotation-invariant and we are free to cut anywhere;
+evaluating all 2n candidates costs one O(n) pass.
+
+**This is separable from the parallel work**, which matters for contributing it upstream: it is a
+~40-line change that helps any serial solve.
+
+Note the side effect: with both paths now using the same cut, `parallel-1thread` vs `serial`
+collapses to ~0 % (+0.33 % / −0.17 %). That is the expected result and a useful confirmation — the
+earlier 1–12 % gap really was the cut, not the depot or the greedy seed.
+
 ## Render verification
 
 Since 2026-07-30 every bench run also replays the drawing's *intent trace* onto a canvas and diffs

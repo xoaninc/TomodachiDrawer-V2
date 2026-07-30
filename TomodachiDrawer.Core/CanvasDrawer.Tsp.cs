@@ -223,7 +223,8 @@ namespace TomodachiDrawer.Core
         private List<CanvasPoint>? PerformTSP(
             List<CanvasPoint> inputPoints,
             float timeLimitSeconds,
-            out double solveMs
+            out double solveMs,
+            bool holdsAAcrossAdjacent = false
         )
         {
             solveMs = 0;
@@ -286,7 +287,18 @@ namespace TomodachiDrawer.Core
                 index = solution.Value(routing.NextVar(index));
             }
 
-            return optimizedRoute;
+            // OrTools writes the cycle out starting at the depot, which drops the arc from the last
+            // node back to it. That is one of n possible cuts, chosen for us by where the depot
+            // happened to be, and it ignores how long the dropped arc actually is. The objective is a
+            // closed cycle so its cost is rotation-invariant — we are free to cut anywhere, and
+            // picking the best of all 2n candidates costs one O(n) pass.
+            var (cutIndex, forward) = ChooseCut(
+                optimizedRoute,
+                _cursorX,
+                _cursorY,
+                holdsAAcrossAdjacent
+            );
+            return ApplyCut(optimizedRoute, cutIndex, forward);
         }
     }
 }

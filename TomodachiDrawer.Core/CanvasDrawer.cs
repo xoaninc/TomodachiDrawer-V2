@@ -814,7 +814,7 @@ namespace TomodachiDrawer.Core
             if (precomputed != null)
             {
                 // Parallel pre-solve already produced the route; orient it from the live cursor.
-                optimizedRoute = CutCycleNearCursor(precomputed);
+                optimizedRoute = CutCycleNearCursor(precomputed, holdsAAcrossAdjacent: true);
             }
             else
             {
@@ -967,67 +967,100 @@ namespace TomodachiDrawer.Core
         /// possible cut instead of the one that happens to sit at the depot.
         /// </para>
         /// <para>
-        /// A cycle's cost is rotation-invariant, so cutting arc <c>(q_j, q_j+1)</c> costs
-        /// <c>C - d(q_j, q_j+1)</c> plus the travel from the cursor to whichever end we start from.
-        /// Both directions fall out of the inner <c>min</c>, so all 2n candidates are covered in one
-        /// O(n) pass.
+        /// A cycle's cost is rotation-invariant, so cutting arc <c>(q_j, q_j+1)</c> drops that arc's
+        /// travel and adds the travel from the cursor to whichever end we start from. Both
+        /// directions fall out of the inner <c>min</c>, so all 2n candidates are covered in one O(n)
+        /// pass.
         /// </para>
         /// <para>
         /// <b>Only valid for cycles.</b> Held-Karp returns an open path with no closing arc, so its
         /// routes must not come through here.
         /// </para>
         /// </summary>
-        private List<CanvasPoint> CutCycleNearCursor(IReadOnlyList<CanvasPoint> route)
+        /// <param name="holdsAAcrossAdjacent">
+        /// True only for the fine-detail phase, which holds A across Chebyshev-1 neighbours
+        /// (see FineDetailTsp). Cutting such an arc splits a hold run, which costs exactly ONE extra
+        /// press/release group — every tap is the same 25/25ms, so the whole emission cost for a cut
+        /// at arc j is <c>(C - arc_j) + groups(j) + travel_j</c> taps, and
+        /// <c>groups(j) = n - (L1 - s_j)</c> where L1 (the number of Chebyshev-1 arcs in the cycle)
+        /// is constant and <c>s_j</c> is 1 when arc j is short. So the correction is +1 tap, not an
+        /// override. The stamp and bucket phases emit one plain <c>Tap(A)</c> per point with no
+        /// holds at all, so for them the correction must be zero.
+        /// </param>
+        private List<CanvasPoint> CutCycleNearCursor(
+            IReadOnlyList<CanvasPoint> route,
+            bool holdsAAcrossAdjacent = false
+        )
         {
             int n = route.Count;
             if (n < 2)
                 return new List<CanvasPoint>(route);
 
-            // Cutting an arc of length 1 can split an A-hold run (FineDetailTsp holds A across
-            // Chebyshev-1 neighbours), which costs a press/release pair the cost model does not see.
-            // So prefer any cut on a longer arc, and only cut a length-1 arc if every arc is one.
-            int bestJ = -1;
+            var (bestJ, bestForward) = ChooseCut(route, _cursorX, _cursorY, holdsAAcrossAdjacent);
+            return ApplyCut(route, bestJ, bestForward);
+        }
+
+        /// <summary>
+        /// The cut decision, as a pure function of the route and cursor so it can be tested and
+        /// brute-force checked without a live CanvasDrawer. Returns the arc index to cut and whether
+        /// to traverse forwards from its far end.
+        /// </summary>
+        internal static (int CutIndex, bool Forward) ChooseCut(
+            IReadOnlyList<CanvasPoint> route,
+            int cursorX,
+            int cursorY,
+            bool holdsAAcrossAdjacent
+        )
+        {
+            int n = route.Count;
+            int bestJ = 0;
             long bestScore = long.MaxValue;
-            bool bestIsShortArc = true;
             bool bestForward = true;
 
             for (int j = 0; j < n; j++)
             {
                 int nextIdx = (j + 1) % n;
                 int arc = Chebyshev(route[j], route[nextIdx]);
-                int dToJ = MeasureDistanceToFromCurrent(route[j].X, route[j].Y);
-                int dToNext = MeasureDistanceToFromCurrent(route[nextIdx].X, route[nextIdx].Y);
+                int dToJ = Math.Max(Math.Abs(cursorX - route[j].X), Math.Abs(cursorY - route[j].Y));
+                int dToNext = Math.Max(
+                    Math.Abs(cursorX - route[nextIdx].X),
+                    Math.Abs(cursorY - route[nextIdx].Y)
+                );
 
-                bool forward = dToNext <= dToJ; // start at nextIdx and walk forward
-                long score = -(long)arc + Math.Min(dToJ, dToNext); // C is constant, so drop it
-                bool isShortArc = arc <= 1;
+                // C is the same for every candidate, so it drops out of the comparison.
+                long score = -(long)arc + Math.Min(dToJ, dToNext);
+                if (holdsAAcrossAdjacent && arc <= 1)
+                    score += 1; // the split hold run, priced exactly — one extra press/release
 
-                // A long-arc cut always wins over a short-arc cut, regardless of score.
-                bool better =
-                    bestJ < 0
-                    || (bestIsShortArc && !isShortArc)
-                    || (bestIsShortArc == isShortArc && score < bestScore);
-
-                if (better)
+                if (score < bestScore)
                 {
-                    bestJ = j;
                     bestScore = score;
-                    bestIsShortArc = isShortArc;
-                    bestForward = forward;
+                    bestJ = j;
+                    bestForward = dToNext <= dToJ;
                 }
             }
 
+            return (bestJ, bestForward);
+        }
+
+        internal static List<CanvasPoint> ApplyCut(
+            IReadOnlyList<CanvasPoint> route,
+            int cutIndex,
+            bool forward
+        )
+        {
+            int n = route.Count;
             var result = new List<CanvasPoint>(n);
-            if (bestForward)
+            if (forward)
             {
-                int startIdx = (bestJ + 1) % n;
+                int startIdx = (cutIndex + 1) % n;
                 for (int i = 0; i < n; i++)
                     result.Add(route[(startIdx + i) % n]);
             }
             else
             {
                 for (int i = 0; i < n; i++)
-                    result.Add(route[((bestJ - i) % n + n) % n]);
+                    result.Add(route[((cutIndex - i) % n + n) % n]);
             }
             return result;
         }

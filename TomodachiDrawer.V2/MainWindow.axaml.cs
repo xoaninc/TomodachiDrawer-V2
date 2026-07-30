@@ -932,26 +932,13 @@ public partial class MainWindow : Window
         DrawTimeLabel.Text = $"Draw Time Estimate: {estimateStr}";
     }
 
-    // A hash of everything that affects the generated route. If two calls produce
-    // the same fingerprint, the cached .tdld is safe to reuse.
-    private static string ComputeFingerprint(SKBitmap img, DrawImageSettings settings, SwitchVersion ver)
-    {
-        using var ms = new MemoryStream();
-        var pixels = img.Bytes;
-        ms.Write(pixels, 0, pixels.Length);
-        // Build the settings part by hand instead of JsonSerializer.Serialize(settings): the
-        // reflection-based overload is trim-unsafe (IL2026 under PublishTrimmed). Lists every field
-        // that affects the generated route so the cache still invalidates when any of them changes.
-        var q = settings.QuantizerSettings;
-        var meta = System.Text.Encoding.UTF8.GetBytes(
-            $"|{img.Width}x{img.Height}|{ver}|q={q.quantizerName}|c={q.colourCount}|dith={q.useDithering}"
-                + $"|denoise={settings.DenoiserName}|tsp={settings.TSPTimeLimit}|nolb={settings.DisableLargeBrush}"
-                + $"|exp={settings.EnableExperimentalFeatures}|home={settings.HomeToTopLeft}"
-        );
-        ms.Write(meta, 0, meta.Length);
-        ms.Position = 0;
-        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(ms));
-    }
+    // Moved to Core (RouteFingerprint) so the "does every setting invalidate the cache?" property
+    // can be tested — see FingerprintTests. Keeping a thin wrapper so call sites read the same.
+    private static string ComputeFingerprint(
+        SKBitmap img,
+        DrawImageSettings settings,
+        SwitchVersion ver
+    ) => RouteFingerprint.Compute(img, settings, ver);
 
     // Generates the .tdld for the given image/settings, OR returns the cached one
     // if the inputs are byte-for-byte identical to the last generation. Runs the

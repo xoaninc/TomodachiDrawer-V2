@@ -1,0 +1,109 @@
+{
+  "tspLimit": 1,
+  "repeats": 3,
+  "quantizer": "Arbitrary",
+  "colours": 32,
+  "switchVersion": "Switch2",
+  "cores": 10,
+  "results": [
+    {
+      "Image": "grid64",
+      "Width": 64,
+      "Height": 64,
+      "Arm": "serial",
+      "DPadTaps": 2503,
+      "PaintActions": 1020,
+      "StickMoves": 16,
+      "DrawSeconds": 245.3,
+      "GenerateSeconds": 12.0753662
+    },
+    {
+      "Image": "grid64",
+      "Width": 64,
+      "Height": 64,
+      "Arm": "parallel",
+      "DPadTaps": 2817,
+      "PaintActions": 1020,
+      "StickMoves": 16,
+      "DrawSeconds": 260.9,
+      "GenerateSeconds": 1.5432925
+    },
+    {
+      "Image": "grid64",
+      "Width": 64,
+      "Height": 64,
+      "Arm": "parallel-1thread",
+      "DPadTaps": 2810,
+      "PaintActions": 1020,
+      "StickMoves": 16,
+      "DrawSeconds": 260.55,
+      "GenerateSeconds": 12.0455765
+    },
+    {
+      "Image": "rings128",
+      "Width": 128,
+      "Height": 128,
+      "Arm": "serial",
+      "DPadTaps": 16695,
+      "PaintActions": 7457,
+      "StickMoves": 46,
+      "DrawSeconds": 1255.4,
+      "GenerateSeconds": 33.63012
+    },
+    {
+      "Image": "rings128",
+      "Width": 128,
+      "Height": 128,
+      "Arm": "parallel",
+      "DPadTaps": 17231,
+      "PaintActions": 7457,
+      "StickMoves": 46,
+      "DrawSeconds": 1283,
+      "GenerateSeconds": 5.5537295
+    },
+    {
+      "Image": "rings128",
+      "Width": 128,
+      "Height": 128,
+      "Arm": "parallel-1thread",
+      "DPadTaps": 17204,
+      "PaintActions": 7457,
+      "StickMoves": 46,
+      "DrawSeconds": 1281.35,
+      "GenerateSeconds": 33.5693892
+    },
+    {
+      "Image": "mosaic256",
+      "Width": 256,
+      "Height": 256,
+      "Arm": "serial",
+      "DPadTaps": 117433,
+      "PaintActions": 32068,
+      "StickMoves": 64,
+      "DrawSeconds": 7311.2,
+      "GenerateSeconds": 59.7380108
+    },
+    {
+      "Image": "mosaic256",
+      "Width": 256,
+      "Height": 256,
+      "Arm": "parallel",
+      "DPadTaps": 120332,
+      "PaintActions": 32068,
+      "StickMoves": 64,
+      "DrawSeconds": 7456.1,
+      "GenerateSeconds": 11.1900774
+    },
+    {
+      "Image": "mosaic256",
+      "Width": 256,
+      "Height": 256,
+      "Arm": "parallel-1thread",
+      "DPadTaps": 119341,
+      "PaintActions": 32068,
+      "StickMoves": 64,
+      "DrawSeconds": 7406.75,
+      "GenerateSeconds": 59.7218945
+    }
+  ]
+}

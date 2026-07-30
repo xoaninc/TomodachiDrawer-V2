@@ -41,15 +41,19 @@ internal static class EspFlasher
     private const int MaxFlashAttempts = 3;
 
     /// <summary>Flashes a .tdld program to the data partition.</summary>
-    public static Task FlashTdldAsync(string serialPort, byte[] tdldData,
-                                      IProgress<float>? progress = null,
-                                      CancellationToken ct = default,
-                                      Action<string>? log = null)
+    public static Task FlashTdldAsync(
+        string serialPort,
+        byte[] tdldData,
+        IProgress<float>? progress = null,
+        CancellationToken ct = default,
+        Action<string>? log = null
+    )
     {
         if (tdldData.Length > TdldPartitionSize)
             throw new ArgumentException(
-                $"TDLD data exceeds the {TdldPartitionSize} byte partition. " +
-                "This would overflow the ESP32-S3 tdld partition!");
+                $"TDLD data exceeds the {TdldPartitionSize} byte partition. "
+                    + "This would overflow the ESP32-S3 tdld partition!"
+            );
 
         // The ESP32-S3 stub flasher writes flash in 32-bit words. When the total
         // length is NOT a multiple of 4, the final tail-page flush — which surfaces
@@ -83,15 +87,22 @@ internal static class EspFlasher
     }
 
     /// <summary>Flashes the merged base firmware image (bootloader+parttable+app).</summary>
-    public static Task FlashBaseFirmwareAsync(string serialPort, byte[] mergedFirmware,
-                                              IProgress<float>? progress = null,
-                                              CancellationToken ct = default,
-                                              Action<string>? log = null)
-        => UploadAtOffsetAsync(serialPort, MergedFirmwareOffset, mergedFirmware, progress, ct, log);
+    public static Task FlashBaseFirmwareAsync(
+        string serialPort,
+        byte[] mergedFirmware,
+        IProgress<float>? progress = null,
+        CancellationToken ct = default,
+        Action<string>? log = null
+    ) => UploadAtOffsetAsync(serialPort, MergedFirmwareOffset, mergedFirmware, progress, ct, log);
 
-    private static async Task UploadAtOffsetAsync(string serialPort, uint offset, byte[] data,
-                                                  IProgress<float>? progress, CancellationToken ct,
-                                                  Action<string>? log = null)
+    private static async Task UploadAtOffsetAsync(
+        string serialPort,
+        uint offset,
+        byte[] data,
+        IProgress<float>? progress,
+        CancellationToken ct,
+        Action<string>? log = null
+    )
     {
         // MD5 of the exact bytes we intend to flash. We compare this against the
         // device's flash MD5 over the FULL expected length, so a write that wrote
@@ -107,8 +118,9 @@ internal static class EspFlasher
             ChipTypes chip = await toolbox.DetectChipTypeAsync(loader, ct);
             if (chip != ChipTypes.ESP32s3)
                 throw new InvalidOperationException(
-                    $"Expected an ESP32-S3 on {serialPort} but detected {chip}. " +
-                    "Make sure the board is in download mode (hold BOOT, tap RESET).");
+                    $"Expected an ESP32-S3 on {serialPort} but detected {chip}. "
+                        + "Make sure the board is in download mode (hold BOOT, tap RESET)."
+                );
 
             // Run the flasher stub (softloader) once: the ESP32-S3 ROM bootloader
             // rejects FLASH_BEGIN ("FlashBegin failed Invalid"), so flashing must go
@@ -129,7 +141,9 @@ internal static class EspFlasher
                     // A block that failed all its retries aborts this attempt; the
                     // MD5 check below confirms the region is incomplete and we re-flash.
                     lastError = ex;
-                    log?.Invoke($"ESP32 flash attempt {attempt}/{MaxFlashAttempts} aborted: {ex.Message}");
+                    log?.Invoke(
+                        $"ESP32 flash attempt {attempt}/{MaxFlashAttempts} aborted: {ex.Message}"
+                    );
                 }
 
                 // Verify the ENTIRE expected region via the device's own flash MD5.
@@ -146,8 +160,10 @@ internal static class EspFlasher
                     // image — fail loudly instead of leaving a silently-broken flash.
                     throw new IOException(
                         "ESP32 flash failed and could not be verified — the board may hold an "
-                        + "incomplete .tdld. Re-export in download mode (hold BOOT, tap RESET, "
-                        + "release BOOT).", ex);
+                            + "incomplete .tdld. Re-export in download mode (hold BOOT, tap RESET, "
+                            + "release BOOT).",
+                        ex
+                    );
                 }
 
                 if (Md5Equal(deviceMd5, expectedMd5))
@@ -155,15 +171,19 @@ internal static class EspFlasher
                     await toolbox.ResetDeviceAsync(comm, ct);
                     return; // verified-complete write
                 }
-                log?.Invoke($"ESP32 flash attempt {attempt}/{MaxFlashAttempts}: written region failed "
-                            + "MD5 verification, re-flashing.");
+                log?.Invoke(
+                    $"ESP32 flash attempt {attempt}/{MaxFlashAttempts}: written region failed "
+                        + "MD5 verification, re-flashing."
+                );
                 // MD5 mismatch => truncated/corrupt write; loop and re-flash.
             }
 
             throw new IOException(
                 $"ESP32 flash verification kept failing after {MaxFlashAttempts} attempts (MD5 "
-                + "mismatch) — the write keeps coming out incomplete. Re-export in download mode "
-                + "and try again.", lastError);
+                    + "mismatch) — the write keeps coming out incomplete. Re-export in download mode "
+                    + "and try again.",
+                lastError
+            );
         }
         finally
         {
@@ -176,9 +196,14 @@ internal static class EspFlasher
     // has no per-block retry and silently stops on a short stream read). Each block
     // is sent straight from the source array and retried on transient failures, so a
     // flaky USB-Serial-JTAG block no longer leaves a truncated image.
-    private static async Task FlashRegionAsync(SoftLoader soft, uint offset, byte[] data,
-                                               IProgress<float>? progress, Action<string>? log,
-                                               CancellationToken ct)
+    private static async Task FlashRegionAsync(
+        SoftLoader soft,
+        uint offset,
+        byte[] data,
+        IProgress<float>? progress,
+        Action<string>? log,
+        CancellationToken ct
+    )
     {
         const uint blockSize = 1024;
         const int blockRetries = 4;
@@ -201,9 +226,12 @@ internal static class EspFlasher
                     await soft.FlashDataAsync(block, i, ct);
                     break;
                 }
-                catch (Exception ex) when (attempt < blockRetries && ex is not OperationCanceledException)
+                catch (Exception ex)
+                    when (attempt < blockRetries && ex is not OperationCanceledException)
                 {
-                    log?.Invoke($"  ESP32 block {i + 1}/{blocks} write failed (try {attempt}): {ex.Message} — retrying");
+                    log?.Invoke(
+                        $"  ESP32 block {i + 1}/{blocks} write failed (try {attempt}): {ex.Message} — retrying"
+                    );
                 }
             }
             progress?.Report((float)(i + 1) / blocks);

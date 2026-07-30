@@ -16,7 +16,11 @@ public partial class VirtualGamepadControllerWindow : Window
         InitializeComponent();
     }
 
-    private async void HandlePressOrRelease(object? sender, bool pressed, PointerPointProperties pointerProperties)
+    private async void HandlePressOrRelease(
+        object? sender,
+        bool pressed,
+        PointerPointProperties pointerProperties
+    )
     {
         if (pressed && !pointerProperties.IsLeftButtonPressed)
             return;
@@ -109,10 +113,9 @@ public partial class VirtualGamepadControllerWindow : Window
         if (VirtualGamepad.Controller == null)
             return;
 
-
         if (_currentStickFreeStyle == null)
             return;
-        
+
         var (xAxis, yAxis) = TagToAxis(_currentStickFreeStyle);
         VirtualGamepad.Controller.SetAxisValue(xAxis, 0);
         VirtualGamepad.Controller.SetAxisValue(yAxis, 0);
@@ -141,7 +144,9 @@ public partial class VirtualGamepadControllerWindow : Window
         var yPercent = Math.Clamp(pos.Y / ctrl.Height, 0, 1);
 
         short xAxisValue = (short)(xPercent * (short.MaxValue - short.MinValue) - short.MinValue);
-        short yAxisValue = (short)((1 - yPercent) * (short.MaxValue - short.MinValue) - short.MinValue);
+        short yAxisValue = (short)(
+            (1 - yPercent) * (short.MaxValue - short.MinValue) - short.MinValue
+        );
 
         VirtualGamepad.Controller.SetAxisValue(xAxis, xAxisValue);
         VirtualGamepad.Controller.SetAxisValue(yAxis, yAxisValue);
@@ -153,7 +158,7 @@ public partial class VirtualGamepadControllerWindow : Window
         {
             "LS" => (Xbox360Axis.LeftThumbX, Xbox360Axis.LeftThumbY),
             "RS" => (Xbox360Axis.RightThumbX, Xbox360Axis.RightThumbY),
-            _ => throw new NotImplementedException()
+            _ => throw new NotImplementedException(),
         };
     }
 
@@ -175,30 +180,31 @@ public partial class VirtualGamepadControllerWindow : Window
         HandlePressOrRelease(tag, pressed: false);
     }
 
-    private static string? KeyToTag(Key key) => key switch
-    {
-        Key.Q => "ZL",
-        Key.E => "L",
-        Key.F => "LS",
-        Key.W => "LS_Up",
-        Key.S => "LS_Down",
-        Key.A => "LS_Left",
-        Key.D => "LS_Right",
-        Key.Up => "Up",
-        Key.Down => "Down",
-        Key.Left => "Left",
-        Key.Right => "Right",
-        Key.O => "ZR",
-        Key.U => "R",
-        Key.Z => "A",
-        Key.X => "B",
-        Key.C => "X",
-        Key.Y => "V",
-        Key.H => "RS",
-        Key.I => "Up",
-        Key.K => "Down",
-        Key.J => "Left",
-        Key.L => "Right",
-        _ => null,
-    };
+    private static string? KeyToTag(Key key) =>
+        key switch
+        {
+            Key.Q => "ZL",
+            Key.E => "L",
+            Key.F => "LS",
+            Key.W => "LS_Up",
+            Key.S => "LS_Down",
+            Key.A => "LS_Left",
+            Key.D => "LS_Right",
+            Key.Up => "Up",
+            Key.Down => "Down",
+            Key.Left => "Left",
+            Key.Right => "Right",
+            Key.O => "ZR",
+            Key.U => "R",
+            Key.Z => "A",
+            Key.X => "B",
+            Key.C => "X",
+            Key.Y => "V",
+            Key.H => "RS",
+            Key.I => "Up",
+            Key.K => "Down",
+            Key.J => "Left",
+            Key.L => "Right",
+            _ => null,
+        };
 }

@@ -5,6 +5,7 @@ namespace TomodachiDrawer.Core.ImageProcessing
     public static class ImageMasker
     {
         private const string ResourcePath = "TomodachiDrawer.Core.Assets.Masks.";
+
         public static SKBitmap? GetMask(TomodachiLifeMask mask)
         {
             var targetResourceName = ResourcePath + mask.GetFileName();

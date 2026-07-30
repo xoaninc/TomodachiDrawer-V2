@@ -11,41 +11,107 @@ git fetch upstream
 git diff <last-synced-commit> upstream/master
 ```
 
-After porting, update the marker here.
+Read individual ports with `git show <hash> -- <path>` or
+`git show upstream/master:<path>`. After porting, update the marker here.
 
 ## Last synced
 
-- **Through:** `upstream/master @ 6ce4683` (upstream tag **0.6.0**)
+- **Through:** `upstream/master @ 8720417` ("CSharpier format pass", one commit past
+  upstream tag **0.8.3** = `a50213c`)
 - **Fork point:** upstream `d5f64bc` (merge of PR #38, virtual-gamepad-sink) =
   our pre-V2 baseline.
-- **Date:** 2026-05-26
+- **Date:** 2026-07-29
+- **Previous marker:** `6ce4683` (upstream tag 0.6.0), 2026-05-26 — 122 commits ago.
 
-## Ported in this sync
+Full analysis of this sync: [`Docs/UPSTREAM_SYNC_AUDIT.md`](./Docs/UPSTREAM_SYNC_AUDIT.md).
 
-- **RP2350 (Raspberry Pi Pico 2) support — full** (upstream PR #55):
-  - Firmware: per-board output suffix in `TomodachiDrawer.Firmware/CMakeLists.txt`
-    (`PICO_PLATFORM` → `TomodachiDrawer.Firmware.{rp2040,rp2350}.uf2`) and the
-    RP2350 RGB vs RP2040 GRB neopixel byte-order conditional.
-  - Flasher: `UF2Flasher` gains `RPChipType`, RP2350 family ID `0xe48bff57`,
-    `FindRP2350Drive`/`FindDriveForChip`.
-  - UI: `MainWindow` output panel is now a RP2040/RP2350 `TabControl`; click
-    handlers dispatch on chip (`ExportToDeviceButton_Click`, generic
-    `ExportUF2Button_Click`/`FlashFirmwareButton_Click`, `UpdateChipUI`).
-  - Packaging: firmware `.uf2`s are **CI-built per board** (not committed; see
-    `.gitignore`) and bundled at publish time; `.csproj` globs
-    `TomodachiDrawer.Firmware.*.uf2`.
-- **Button-behaviour reliability mitigation** (upstream `a5f8703`): try/finally
-  around `ExportUF2Button_Click` and a resilient try/catch around the Pico polling
-  loop so a transient error never leaves the UI locked. (Our
-  `ExportToDeviceButton_Click` already had this from V2.)
+## Ported in this sync (0.6.0 → 0.8.3)
+
+### Dependencies
+- **SixLabors.ImageSharp → JeremyAnsel.ColorQuant** (`85ab810`, `4bfef74`). Changes palette
+  selection for "Arbitrary" mode, so it landed before the measurement baseline. Losing the
+  Floyd-Steinberg dither path cost nothing — `GetQuantizerSettings()` passed `default` for
+  `useDithering` in both branches, so it was already dead code.
+- **SkiaSharp 3.119.2 → 4.150.1** plus an explicit `SkiaSharp.NativeAssets.Linux` pin (V2 had
+  none and publishes both `linux-x64` and `linux-arm64`).
+- **Avalonia 12.0.3 → 12.1.0** together with `a50213c`, the `Bitmap.Save(path)` deprecation fix.
+  `DebugTools` was still on 12.0.3, so the solution had two Avalonia versions coexisting.
+
+### Routing (upstream `7b22452`, `0c366c1`)
+- `PerformTSP` and friends split into `CanvasDrawer.Tsp.cs`, matching upstream's layout.
+  **Kept V2's nullable signature** — upstream's internalises the fallback and can never report
+  failure, which would make `tspHasSolution` permanently true and silently change the
+  snake-vs-TSP decision.
+- OR-Tools native objects are now disposed (`using var`) at both sites, including
+  `RouteSolver.Solve`, which runs on ~80% of cores.
+- **Held-Karp exact solver** for small point sets, in the **serial path only**: it starts from
+  the live cursor, which the parallel pre-solve cannot know. `ExactMaxPoints` is **12**, not
+  upstream's 16 — n=16 allocates 8 MB of LOH and runs ~8.4M inner iterations per call, to beat
+  a 0.25-0.5s OrTools solve.
+- Recommended TSP times raised to upstream's (1/3/4/5s). Stamp and bucket limits deliberately
+  unchanged — upstream did not change those either.
+- Early-exit / improvement-limit support, **default off** (as upstream ships it).
+- Solver configuration now has exactly one definition, `RouteSolver.BuildSearchParameters`,
+  shared by both paths so they cannot drift.
+
+### Drawing correctness
+- **Colour merge** (`7086620`): colours reaching the same in-game HSV steps collapse into one
+  layer via `ColourPickerRouter.CanonicalKey`.
+- **Erase-all before bucket fill** on full-size Switch 2 images (`0ae89ff`), so a pixel on the
+  top-left cell can't make the bucket fill just that pixel. Includes upstream's fix to the
+  bucket submenu homing, which looped rows for the horizontal move.
+- **Switch 1 brush-menu lag mitigation** (`47331ff`, upstream #120 — splotchy images).
+- **`ReverseColourOrder`** setting (`4419bf6`).
+- **RP2040/RP2350 firmware**: neopixel blue for dpad-only input, brightness tweaks
+  (`01074f2`, `1bba220`).
+
+### Crash fixes
+- `e5ba374` + `022d114` — the "Weezer" crash (#123): a source image with no alpha channel in
+  its `ColorType` made `MedianDenoiser` read past the pixel span. Ported in the final form of
+  both commits: the first version disposed the *caller's* bitmap when no conversion was needed,
+  which was upstream's 0.7.0 crash.
+- `14dd54a` — `SafeNumericUpDown` (#119): with a screen reader active, Avalonia's ComMarshaller
+  throws on the decimal value. See Avalonia#21491.
+- `c2e6fa4` — template tool default height.
+
+### CI / hygiene
+- `actions/checkout` v6→v7, `actions/setup-dotnet` v5→v6, `actions/cache` →v6.
+- pico-sdk caching (`81955cb`).
+- Dependabot config (`e198d0e`, `f5e0bd9`, `228289d`) and a bug-report template (`c359ca4`),
+  adapted for V2.
+
+### V2-only work in this release (not from upstream)
+- **`CutCycleNearCursor`** replaces `OrientFromCursor`. The old one only reversed, considering 2
+  of 2n candidate cuts. An OrTools tour is a closed cycle whose cost is rotation-invariant, so
+  the best cut is found over all 2n candidates in one O(n) pass — and it refuses to cut
+  Chebyshev-1 arcs, which are A-hold runs. **Result: the parallel path now beats the serial one
+  on both pen travel and drawing length**, where before it was 1-12% worse.
+- **`TomodachiDrawer.Bench`** — route cost, coverage and generation wall-clock across three arms
+  (serial / parallel / parallel pinned to one thread). See [`Docs/bench/`](./Docs/bench/).
+- **`TomodachiDrawer.Core.Tests`** — 15 tests. The permutation invariant is the important one: a
+  dropped point makes route cost *and* draw time go down, so it is the one regression the
+  headline metrics would report as an improvement.
+- csharpier pinned at 1.3.0 in `.config/dotnet-tools.json`, verified to reproduce upstream's
+  formatting byte for byte.
 
 ## Intentionally skipped
 
-- **Telemetry (PR #88)** — phones home to `telemetry.l7y.media` (upstream author's
-  own server). Not appropriate for an independent fork. This also covers the
-  bundled "TSP time limit" commit (pure telemetry instrumentation, no drawing
-  change) and "Address trimming errors" (moot — V2 disables IL trimming).
-- **Welcome-message tweaks** (`d98757d`, `6ce4683`) — upstream-branding/version
-  specific; V2 has its own welcome message.
-- **`ColourLayer` `new()`→`[]`** syntax modernization — cosmetic.
+- **Telemetry (PR #88, `009efcb`)** — phones home to `telemetry.l7y.media` (upstream author's
+  own server). Not appropriate for an independent fork.
+- **Sentry crash reporting** (`31affe2`, `5dd17d1`, `b32975f`, `6d19f10`, `06e009a`) — decided
+  against for V2. Note this is a *separate* decision from the telemetry skip above: Sentry is a
+  third-party crash reporter, not the author's own server. The non-Sentry macOS fail-state
+  handling from `ef568b7` is being ported separately.
+- **`5dd17d1`'s property-group unification** (the non-Sentry half) — upstream's `BundleMacOSApp`
+  group carries `<PublishTrimmed>true</PublishTrimmed>`, and V2 deliberately disabled trimming
+  (`ae7f711`: it stripped ESPTool's chip detection and broke ESP32 flashing).
+- **UI state-context refactor** (`355e831`, `31371a5`, `fe3d6fd`) — pure restructuring of
+  `MainWindow.axaml.cs`, the file the two forks have diverged on most. All cost, no user-visible
+  gain.
+- **`8400352`** (pin the ESP-IDF action to a commit hash) — V2's workflow has no ESP-IDF job;
+  the ESP32 firmware ships as a committed binary, so there is nothing to pin.
+- **Upstream's ESP32-S3 port** (`dangoodie`'s PR #46 and follow-ups) — V2 has its own,
+  independently written ESP32-S3 stack with host unit tests and MD5-verified flashing. See the
+  audit's attribution section for the timeline.
+- **Welcome-message and branding commits** — V2 has its own.
 - **`NoImagePlaceholder.png`** swap — cosmetic.

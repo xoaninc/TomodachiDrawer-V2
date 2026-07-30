@@ -34,7 +34,11 @@ It has a crossplatform Avalonia UI desktop app that flashes directly to an **RP2
 - **HID report-descriptor fix** — the controller now declares the full 8-byte input report (the
   original declared 7 while sending 8; the Switch tolerated it but strict USB hosts dropped reports).
 - **Parallel route generation** — the per-layer/per-phase TSP solves run across CPU cores, making
-  route generation ~6-7× faster on a multi-core machine, with byte-identical output to the original.
+  route generation **5-8× faster** on a multi-core machine. Routes are *not* identical to the
+  serial path (the pre-solve runs before emission, so it cannot know where the pen will be when
+  each layer starts) — but since 0.5 they are **shorter**: measured 2-5% less pen travel and
+  3-7% shorter drawings than solving serially. See [`Docs/bench/`](./Docs/bench/) for the numbers
+  and how to reproduce them.
 - **Reliable, verified ESP32-S3 flashing (0.4)** — every write is now checked against the device's
   own flash MD5 and re-flashed if needed. Previously a flash could silently truncate, leaving a
   drawing that hung on its last layer (LED stuck, never finishing); the parsers also now stop safely
@@ -132,7 +136,8 @@ The solution (`TomodachiDrawer.slnx`) is split into:
 - **TomodachiDrawer.Core** — all platform-agnostic logic: image processing/quantization, the TSP
   pen-route solving (Google OR-Tools), the colour palette, and the output sinks. The `.tdld` binary
   format is defined here in `OutputSinks/FileControllerSink.cs`.
-- **TomodachiDrawer.UI.Avalonia** — the one desktop UI, cross-platform **Avalonia** (not WinForms).
+- **TomodachiDrawer.V2** — the one desktop UI, cross-platform **Avalonia** (not WinForms). (The C#
+  namespace is still `TomodachiDrawer.UI.Avalonia`; only the project folder was renamed.)
   Hosts both flashers: `UF2Flasher` (RP2040) and `EspFlasher` (ESP32-S3). This is the app that ships.
 - **TomodachiDrawer.Firmware** — RP2040 firmware (Pico SDK + TinyUSB + PIO), C.
 - **TomodachiDrawer.Firmware.ESP32** — ESP32-S3 firmware (ESP-IDF), the V2 addition.

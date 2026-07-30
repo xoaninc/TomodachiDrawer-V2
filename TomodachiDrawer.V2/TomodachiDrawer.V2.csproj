@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
-    <Version>0.4.1</Version>
+    <Version>0.5.0</Version>
     <!-- Ship as "TomodachiDrawer V2". The OS process / exe is the (space-free) assembly name
          TomodachiDrawerV2 (a space would be an invalid avares:// URI authority); the human-facing
          product/title carries the space. -->
@@ -16,20 +16,26 @@
     <Product>TomodachiDrawer V2</Product>
     <AssemblyTitle>TomodachiDrawer V2</AssemblyTitle>
     <ApplicationIcon>TomodachiDrawer.ico</ApplicationIcon>
-	<!-- suppress warning from Google.OrTools from trimming since we are rooting it. -->
+    <!-- suppress warning from Google.OrTools from trimming since we are rooting it. -->
     <NoWarn>$(NoWarn);IL2104</NoWarn>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Avalonia" Version="12.0.3" />
-    <PackageReference Include="Avalonia.Desktop" Version="12.0.3" />
-    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.3" />
-    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.0.3" />
+    <PackageReference Include="Avalonia" Version="12.1.0" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.0" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.0" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.0" />
+    <!-- Skia's Linux natives don't flow transitively at the right version for the
+         linux-x64/linux-arm64 publishes, so pin them explicitly to match Core's SkiaSharp. -->
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.150.1" />
     <!-- Native C# esptool for flashing the ESP32-S3 firmware/data partitions -->
     <PackageReference Include="ESPTool" Version="3.0.3" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\TomodachiDrawer.Core\TomodachiDrawer.Core.csproj" />
-    <ProjectReference Condition="'$(Configuration)' == 'Debug'" Include="..\TomodachiDrawer.DebugTools\TomodachiDrawer.DebugTools.csproj" />
+    <ProjectReference
+      Condition="'$(Configuration)' == 'Debug'"
+      Include="..\TomodachiDrawer.DebugTools\TomodachiDrawer.DebugTools.csproj"
+    />
   </ItemGroup>
   <ItemGroup>
     <!-- publish trimming thing-->
@@ -61,7 +67,11 @@
     <PublishSingleFile>false</PublishSingleFile>
     <IncludeNativeLibrariesForSelfExtract>false</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
-  <Target Name="BundleMacOS" AfterTargets="Publish" Condition="'$(BundleMacOSApp)' == 'true' And $(RuntimeIdentifier.StartsWith('osx'))">
+  <Target
+    Name="BundleMacOS"
+    AfterTargets="Publish"
+    Condition="'$(BundleMacOSApp)' == 'true' And $(RuntimeIdentifier.StartsWith('osx'))"
+  >
     <PropertyGroup>
       <AppBundleDir>$([System.IO.Path]::Combine('$(PublishDir)', 'TomodachiDrawer V2.app'))</AppBundleDir>
       <ContentsDir>$([System.IO.Path]::Combine('$(AppBundleDir)', 'Contents'))</ContentsDir>
@@ -70,12 +80,18 @@
     </PropertyGroup>
     <ItemGroup>
       <FirmwareFiles Include="$(PublishDir)TomodachiDrawer.Firmware.*.uf2" />
-      <PublishFiles Include="$(PublishDir)**\*.*" Exclude="$(AppBundleDir)\**\*.*;$(PublishDir)TomodachiDrawer.Firmware.*.uf2" />
+      <PublishFiles
+        Include="$(PublishDir)**\*.*"
+        Exclude="$(AppBundleDir)\**\*.*;$(PublishDir)TomodachiDrawer.Firmware.*.uf2"
+      />
     </ItemGroup>
     <MakeDir Directories="$(AppBundleDir);$(ContentsDir);$(MacOsDir);$(ResourcesDir)" />
     <Move SourceFiles="@(PublishFiles)" DestinationFolder="$(MacOsDir)\%(RecursiveDir)" />
     <Copy SourceFiles="@(FirmwareFiles)" DestinationFolder="$(MacOsDir)" />
-    <Copy SourceFiles="$(ProjectDir)Packaging/macOS/AppIcon.icns" DestinationFolder="$(ResourcesDir)" />
+    <Copy
+      SourceFiles="$(ProjectDir)Packaging/macOS/AppIcon.icns"
+      DestinationFolder="$(ResourcesDir)"
+    />
     <Copy SourceFiles="$(ProjectDir)Packaging/macOS/README.txt" DestinationFolder="$(PublishDir)" />
     <PropertyGroup>
       <PlistSource>$(ProjectDir)Packaging/macOS/Info.plist</PlistSource>

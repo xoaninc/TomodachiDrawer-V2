@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input.Platform;
@@ -7,9 +8,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Platform.Storage;
-
 using SkiaSharp;
-
 using TomodachiDrawer.Core.Extensions;
 using TomodachiDrawer.Core.ImageProcessing;
 
@@ -23,7 +22,8 @@ public partial class TemplateTool : Window
     private SKBitmap _currentPreview = new(256, 256); // this is just to shut up a warning :<
 
     // For preview
-    public TemplateTool() : this(TomodachiLifeMask.BodyTopsLongH) { }
+    public TemplateTool()
+        : this(TomodachiLifeMask.BodyTopsLongH) { }
 
     public TemplateTool(TomodachiLifeMask mask)
     {
@@ -53,7 +53,6 @@ public partial class TemplateTool : Window
 
             Opened += TemplateTool_Opened;
         }
-
     }
 
     private async Task SetClipboardBitmap(Bitmap bitmap)
@@ -63,10 +62,7 @@ public partial class TemplateTool : Window
             await clipboard.SetBitmapAsync(bitmap);
     }
 
-    private async Task ShowMessageAsync(
-        string title,
-        string message
-    )
+    private async Task ShowMessageAsync(string title, string message)
     {
         var buttonRow = new StackPanel
         {
@@ -84,7 +80,6 @@ public partial class TemplateTool : Window
 
         var stack = new StackPanel() { Margin = new Thickness(16) };
         buttonRow.Children.Add(okButton);
-
 
         stack.Children.Insert(
             0,
@@ -127,36 +122,49 @@ public partial class TemplateTool : Window
 
     private async void SaveTemplateButton_Click(object? sender, RoutedEventArgs e)
     {
-        if (_betterMask == null) return;
-        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
-        {
-            Title = "Save Template",
-            SuggestedFileName = $"{_mask}_template.png",
-            DefaultExtension = "png",
-            FileTypeChoices = [new FilePickerFileType("PNG Image") { Patterns = ["*.png"] }],
-        });
+        if (_betterMask == null)
+            return;
+        var file = await StorageProvider.SaveFilePickerAsync(
+            new FilePickerSaveOptions
+            {
+                Title = "Save Template",
+                SuggestedFileName = $"{_mask}_template.png",
+                DefaultExtension = "png",
+                FileTypeChoices = [new FilePickerFileType("PNG Image") { Patterns = ["*.png"] }],
+            }
+        );
         var path = file?.TryGetLocalPath();
         if (path != null)
-            _betterMask.Save(path);
+            _betterMask.Save(
+                path,
+                new PngBitmapEncoderOptions { CompressionLevel = CompressionLevel.NoCompression }
+            );
     }
 
     private async void OpenDrawingButton_Click(object? sender, RoutedEventArgs e)
     {
-        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = "Open Drawing",
-            AllowMultiple = false,
-            FileTypeFilter = [new FilePickerFileType("PNG Image") { Patterns = ["*.png"] }],
-        });
-        if (files.Count == 0) return;
+        var files = await StorageProvider.OpenFilePickerAsync(
+            new FilePickerOpenOptions
+            {
+                Title = "Open Drawing",
+                AllowMultiple = false,
+                FileTypeFilter = [new FilePickerFileType("PNG Image") { Patterns = ["*.png"] }],
+            }
+        );
+        if (files.Count == 0)
+            return;
         var path = files[0].TryGetLocalPath();
-        if (path == null) return;
+        if (path == null)
+            return;
 
         using var bitmap = new Bitmap(path);
         var skiaBitmap = ToSKBitmap(bitmap);
         if (skiaBitmap.Width != 256 || skiaBitmap.Height != 256)
         {
-            await ShowMessageAsync("Error", "The image must be 256x256. You can save the template with the Save Template To File button to use as a starting point.");
+            await ShowMessageAsync(
+                "Error",
+                "The image must be 256x256. You can save the template with the Save Template To File button to use as a starting point."
+            );
             return;
         }
         var masked = ImageMasker.MaskImage(skiaBitmap, ImageMasker.GetMask(_mask)!);
@@ -184,7 +192,9 @@ public partial class TemplateTool : Window
 
     private static SKBitmap MakeBetterMask(SKBitmap mask)
     {
-        using var nodrawStream = AssetLoader.Open(new Uri("avares://TomodachiDrawerV2/Assets/nodraw.png"));
+        using var nodrawStream = AssetLoader.Open(
+            new Uri("avares://TomodachiDrawerV2/Assets/nodraw.png")
+        );
         using var nodraw = SKBitmap.Decode(nodrawStream);
         var tinted = mask.Copy();
         for (int y = 0; y < 256; y++)
@@ -204,7 +214,10 @@ public partial class TemplateTool : Window
     {
         ArgumentNullException.ThrowIfNull(avaloniaBitmap);
         using var stream = new MemoryStream();
-        avaloniaBitmap.Save(stream);
+        avaloniaBitmap.Save(
+            stream,
+            new PngBitmapEncoderOptions { CompressionLevel = CompressionLevel.NoCompression }
+        );
         stream.Seek(0, SeekOrigin.Begin);
         return SKBitmap.Decode(stream);
     }
@@ -231,7 +244,10 @@ public partial class TemplateTool : Window
                 bitmap.Dispose();
                 if (skiaBitmap.Width != 256 || skiaBitmap.Height != 256)
                 {
-                    await ShowMessageAsync($"Error", "The image you had on your clipboard was not 256x256. You can copy the template again with the Copy Template To Clipboard button.");
+                    await ShowMessageAsync(
+                        $"Error",
+                        "The image you had on your clipboard was not 256x256. You can copy the template again with the Copy Template To Clipboard button."
+                    );
                 }
                 else
                 {

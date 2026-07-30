@@ -10,7 +10,7 @@ using TomodachiDrawer.Core.OutputSinks;
 
 namespace TomodachiDrawer.Core
 {
-    public class CanvasDrawer
+    public partial class CanvasDrawer
     {
         public const int CanvasWidth = 256;
         public const int CanvasHeight = 256;
@@ -32,18 +32,28 @@ namespace TomodachiDrawer.Core
         /// </summary>
         private readonly bool _parallelSolves;
 
+        /// <summary>
+        /// Overrides the pre-solve thread count. Null uses the default (~80% of logical cores).
+        /// Setting it to 1 runs the parallel code path serially, which isolates route differences
+        /// from CPU-throughput effects — the OR-Tools solver is wall-clock limited, so a solve that
+        /// shares cores explores less than the same solve run alone.
+        /// </summary>
+        private readonly int? _maxParallelism;
+
         public CanvasDrawer(
             ISwitchOutput outputSink,
             SwitchVersion switchVersion,
             Action<string>? logger = null,
-            bool parallelSolves = false
+            bool parallelSolves = false,
+            int? maxParallelism = null
         )
         {
             _realOutput = outputSink;
             _palette = new(outputSink);
-            _toolbar = new(outputSink);
+            _toolbar = new(outputSink, switchVersion);
             _log = logger ?? Console.WriteLine;
             _parallelSolves = parallelSolves;
+            _maxParallelism = maxParallelism is int m ? Math.Max(1, m) : null;
 
             if (switchVersion == SwitchVersion.None)
                 throw new ArgumentOutOfRangeException(
@@ -54,29 +64,11 @@ namespace TomodachiDrawer.Core
             _switchVersion = switchVersion;
         }
 
-        public static float GetRecommendedTSPSolveTime(int width, int height)
-        {
-            const int squared64 = 64 * 64;
-            const int squared128 = 128 * 128;
-            const int squared192 = 192 * 192;
-            const int squared256 = 256 * 256;
-
-            int pixels = width * height;
-            if (pixels <= squared64)
-                return 0.5f;
-            else if (pixels <= squared128)
-                return 1.5f;
-            else if (pixels <= squared192)
-                return 2.75f;
-            else if (pixels <= squared256)
-                return 4.0f;
-            else
-            {
-                return 5.0f; // should ever reach here...
-            }
-        }
-
-        public async Task DrawImage(SKBitmap image, DrawImageSettings settings)
+        public async Task DrawImage(
+            SKBitmap image,
+            DrawImageSettings settings,
+            CancellationToken cancellationToken = default
+        )
         {
             if (image.Width > CanvasWidth || image.Height > CanvasHeight)
                 throw new InvalidDataException(
@@ -100,6 +92,10 @@ namespace TomodachiDrawer.Core
 
             // Also we need to pass in the quantization method and dithering settings as arguments.
 
+            _earlyExitEnabled = settings.EarlyTspExitEnabled;
+            _earlyExitRateCoefficient = settings.EarlyTspExitRateCoefficient;
+            _earlyExitSolutionsDistance = settings.EarlyTspExitSolutionsDistance;
+
             if (!string.IsNullOrEmpty(settings.DenoiserName))
             {
                 image = ImageDenoiser.DenoiseImage(image, settings.DenoiserName);
@@ -112,6 +108,12 @@ namespace TomodachiDrawer.Core
             // following passes will start to remove from that and add to the stamp passes.
             // TODO: This doesnt really make too much sense to be in the palette class... Maybe move here?
             var layers = _palette.BuildFineLayers(quantizedMap);
+
+            if (settings.ReverseColourOrder)
+            {
+                layers.Reverse();
+                _log("Reversed colour layer order");
+            }
 
             // If we're a full size 256x256 image, or the user just asks for it, we'll home to 0,0 on the canvas automatically.
             if (settings.HomeToTopLeft)
@@ -159,6 +161,11 @@ namespace TomodachiDrawer.Core
                     _log(
                         $"\tUsing bucket to fill most prevalent colour: {bucketColour.Value.DisplayName}"
                     );
+
+                    // Erase all first: on a full-size image a pixel can land on the top-left cell,
+                    // and then the bucket fills just that pixel instead of the canvas.
+                    _toolbar.ClearCanvas();
+
                     _toolbar.SelectBucket();
                     _palette.SelectColour(bucketColour.Value, 25.0);
                     _realOutput.Tap(Button.A);
@@ -208,7 +215,9 @@ namespace TomodachiDrawer.Core
             // PARALLEL PRE-SOLVE: with all layers/phases now fixed, solve every (independent) TSP
             // concurrently before the serial emission. Null when not enabled → emission solves
             // inline as before. See BuildPreRoutes.
-            var preRoutes = _parallelSolves ? BuildPreRoutes(layers, settings) : null;
+            var preRoutes = _parallelSolves
+                ? BuildPreRoutes(layers, settings, cancellationToken)
+                : null;
 
             double totalInLayerTime = 0.0;
 
@@ -217,6 +226,7 @@ namespace TomodachiDrawer.Core
             int layerNumber = 0;
             foreach (var l in layers)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 layerNumber++;
 
                 _palette.SelectColour(l.Colour, 25.0);
@@ -241,16 +251,24 @@ namespace TomodachiDrawer.Core
                         else if (pointCount > 100)
                             tspTime = 1.0f;
                         List<CanvasPoint> optimizedRoute;
-                        if (preRoutes != null)
+                        // TryGetValue, not an indexer: the pre-solve deliberately skips point sets
+                        // small enough for the exact solver, so a missing key is expected.
+                        if (
+                            preRoutes != null
+                            && preRoutes.TryGetValue(
+                                (layerNumber, RoutingPhaseKind.Stamp, brushSize),
+                                out var preStamp
+                            )
+                        )
                         {
-                            optimizedRoute = OrientFromCursor(
-                                preRoutes[(layerNumber, RoutingPhaseKind.Stamp, brushSize)]
-                            );
+                            optimizedRoute = OrientPreSolved(preStamp);
                         }
                         else
                         {
                             var tspResult = PerformTSP(dumbRoute, tspTime, out _); // half a sec per stamp size per colour is prob reasonable?
-                            optimizedRoute = tspResult ?? dumbRoute;
+                            // Nearest-neighbour rather than raw input order: if OrTools found
+                            // nothing, unordered points are the worst possible route.
+                            optimizedRoute = tspResult ?? NearestNeighbourRoute(dumbRoute);
                         }
 
                         foreach (var point in optimizedRoute)
@@ -291,7 +309,11 @@ namespace TomodachiDrawer.Core
                         l,
                         settings.TSPTimeLimit,
                         preRoutes != null
-                            ? preRoutes[(layerNumber, RoutingPhaseKind.FineDetail, 1)]
+                        && preRoutes.TryGetValue(
+                            (layerNumber, RoutingPhaseKind.FineDetail, 1),
+                            out var preFine
+                        )
+                            ? preFine
                             : null
                     );
 
@@ -336,20 +358,26 @@ namespace TomodachiDrawer.Core
                     if (bucketCount > 50)
                         bucketClickRouteTimeout = 0.5f;
                     List<CanvasPoint> optimizedBucketClickRoute;
-                    if (preRoutes != null)
+                    if (
+                        preRoutes != null
+                        && preRoutes.TryGetValue(
+                            (layerNumber, RoutingPhaseKind.BucketClicks, 1),
+                            out var preBucket
+                        )
+                    )
                     {
-                        optimizedBucketClickRoute = OrientFromCursor(
-                            preRoutes[(layerNumber, RoutingPhaseKind.BucketClicks, 1)]
-                        );
+                        optimizedBucketClickRoute = OrientPreSolved(preBucket);
                     }
                     else
                     {
+                        var bucketClicks = l.BucketClicks.ToList();
                         var bucketTspResult = PerformTSP(
-                            l.BucketClicks.ToList(),
+                            bucketClicks,
                             bucketClickRouteTimeout,
                             out _
                         );
-                        optimizedBucketClickRoute = bucketTspResult ?? l.BucketClicks.ToList(); // in case somehow it fails
+                        optimizedBucketClickRoute =
+                            bucketTspResult ?? NearestNeighbourRoute(bucketClicks);
                     }
 
                     foreach (var click in optimizedBucketClickRoute)
@@ -360,9 +388,7 @@ namespace TomodachiDrawer.Core
                     }
                 }
             }
-            _log(
-                $"Done routing!"
-            );
+            _log($"Done routing!");
         }
 
         private static readonly int[] LargeBrushSizes = [27, 19, 13, 7, 3];
@@ -575,9 +601,9 @@ namespace TomodachiDrawer.Core
         {
             int half = brushSize / 2; // rounds down.
             for (int dy = -half; dy <= half; dy++)
-                for (int dx = -half; dx <= half; dx++)
-                    if (!map[cx + dx, cy + dy])
-                        return false;
+            for (int dx = -half; dx <= half; dx++)
+                if (!map[cx + dx, cy + dy])
+                    return false;
 
             return true;
         }
@@ -783,7 +809,7 @@ namespace TomodachiDrawer.Core
             ISwitchOutput output,
             ColourLayer l,
             float timeLimitSeconds,
-            IReadOnlyList<CanvasPoint>? precomputed = null
+            PreSolvedRoute? precomputed = null
         )
         {
             // Find start point, this logic will need adjusted in time
@@ -795,14 +821,14 @@ namespace TomodachiDrawer.Core
             if (precomputed != null)
             {
                 // Parallel pre-solve already produced the route; orient it from the live cursor.
-                optimizedRoute = OrientFromCursor(precomputed);
+                optimizedRoute = OrientPreSolved(precomputed.Value, holdsAAcrossAdjacent: true);
             }
             else
             {
                 var solved = PerformTSP(pointsList, timeLimitSeconds, out _);
                 if (solved == null)
                     _log($"\tTSP timed out. Performing naive routing for TSP instead...");
-                optimizedRoute = solved ?? FineDetailRoughTSP(pointsList);
+                optimizedRoute = solved ?? NearestNeighbourRoute(pointsList);
             }
 
             // Navigate through the optimised route.
@@ -847,163 +873,6 @@ namespace TomodachiDrawer.Core
             }
         }
 
-        /// <summary>Very rough TSP, one pass just repeatedly finds the closest point until its done. Fallback for FineDetailTsp if it times out</summary>
-        /// <param name="output"></param>
-        /// <param name="l">Colour layer to route</param>
-        /// <returns>Ordered list of points as the route</returns>
-        private List<CanvasPoint> FineDetailRoughTSP(List<CanvasPoint> inputPoints)
-        {
-#if DEBUG
-            var sw = Stopwatch.StartNew();
-#endif
-            var points = inputPoints.ToArray();
-
-            var ordered = new List<CanvasPoint>(points.Length);
-
-            if (inputPoints.Count == 0)
-            {
-                return ordered;
-            }
-            else if (inputPoints.Count == 1)
-            {
-                ordered.Add(points[0]);
-                return ordered;
-            }
-
-            var closestPointIndex = 0;
-            var closestPointDist = MeasureDistanceToFromCurrent(points[0].X, points[0].Y);
-            for (int i = 0; i < points.Length; i++)
-            {
-                var p = points[i];
-                var distance = MeasureDistanceToFromCurrent(p.X, p.Y);
-                if (distance < closestPointDist)
-                {
-                    closestPointIndex = i;
-                    closestPointDist = distance;
-                }
-            }
-
-            // We are just going to go to the nearest point repeatedly.
-            var currentIndex = closestPointIndex;
-            ordered.Add(points[currentIndex]);
-            var visited = new bool[points.Length];
-            visited[currentIndex] = true;
-
-            for (int i = 0; i < points.Length - 1; i++)
-            {
-                var cur = points[currentIndex];
-                int nearestIndex = -1;
-                int nearestDist = int.MaxValue;
-
-                for (int j = 0; j < points.Length; j++)
-                {
-                    if (visited[j])
-                        continue;
-                    int dist = Math.Max(Math.Abs(points[j].X - cur.X), Math.Abs(points[j].Y - cur.Y));
-                    if (dist < nearestDist)
-                    {
-                        nearestDist = dist;
-                        nearestIndex = j;
-                    }
-                }
-
-                visited[nearestIndex] = true;
-                ordered.Add(points[nearestIndex]);
-                currentIndex = nearestIndex;
-            }
-#if DEBUG
-            sw.Stop();
-            _log($"\tNaive TSP took {sw.ElapsedMilliseconds}ms");
-#endif
-
-            return ordered;
-        }
-
-        private List<CanvasPoint>? PerformTSP(
-            List<CanvasPoint> inputPoints,
-            float timeLimitSeconds,
-            out double solveMs
-        )
-        {
-            // Defensive: callers currently guard against empty input, but never crash here.
-            if (inputPoints.Count == 0)
-            {
-                solveMs = 0;
-                return new List<CanvasPoint>();
-            }
-
-            var points = inputPoints.ToArray();
-            var closestPointIndex = 0;
-            var closestPointDist = MeasureDistanceToFromCurrent(points[0].X, points[0].Y);
-            for (int i = 0; i < points.Length; i++)
-            {
-                var p = points[i];
-                var distance = MeasureDistanceToFromCurrent(p.X, p.Y);
-                if (distance < closestPointDist)
-                {
-                    closestPointIndex = i;
-                    closestPointDist = distance;
-                }
-            }
-
-            var manager = new RoutingIndexManager(points.Length, 1, closestPointIndex);
-            var routing = new RoutingModel(manager);
-
-            int transitCallbackIndex = routing.RegisterTransitCallback(
-                (fromIndex, toIndex) =>
-                {
-                    var fromNode = manager.IndexToNode(fromIndex);
-                    var toNode = manager.IndexToNode(toIndex);
-                    // A note: during testing I made a change trying to incentivize adjacent things
-                    // since it can just hold A during... but the lowest value this can return is 1
-                    // so there was no gain, it was already trying to do that lol.
-                    return Math.Max(
-                        Math.Abs(points[fromNode].X - points[toNode].X),
-                        Math.Abs(points[fromNode].Y - points[toNode].Y)
-                    );
-                }
-            );
-
-            routing.SetArcCostEvaluatorOfAllVehicles(transitCallbackIndex);
-
-            var searchParameters =
-                operations_research_constraint_solver.DefaultRoutingSearchParameters();
-            searchParameters.FirstSolutionStrategy = FirstSolutionStrategy
-                .Types
-                .Value
-                .PathCheapestArc;
-            searchParameters.LocalSearchMetaheuristic = LocalSearchMetaheuristic
-                .Types
-                .Value
-                .GuidedLocalSearch;
-            // need to get int seconds and int nanoseconds because... google.
-            int seconds = (int)timeLimitSeconds;
-            int nanoseconds = (int)((timeLimitSeconds - seconds) * 1_000_000_000);
-            searchParameters.TimeLimit = new Google.Protobuf.WellKnownTypes.Duration
-            {
-                Seconds = seconds,
-                Nanos = nanoseconds,
-            };
-
-            var sw = Stopwatch.StartNew();
-            var solution = routing.SolveWithParameters(searchParameters);
-            sw.Stop();
-            solveMs = sw.Elapsed.TotalMilliseconds;
-
-            if (solution is null)
-                return null;
-
-            var optimizedRoute = new List<CanvasPoint>(points.Length);
-            long index = routing.Start(0);
-            while (routing.IsEnd(index) == false)
-            {
-                optimizedRoute.Add(points[manager.IndexToNode(index)]);
-                index = solution.Value(routing.NextVar(index));
-            }
-
-            return optimizedRoute;
-        }
-
         /// <summary>
         /// Solves every (independent) per-layer/per-phase TSP concurrently — this is the expensive
         /// work — before the serial emission. Keyed by (1-based layer number, phase kind, brush
@@ -1011,9 +880,10 @@ namespace TomodachiDrawer.Core
         /// the input order if the solver returned nothing, so every key maps to a route covering
         /// all of its points. Pure: only calls <see cref="RouteSolver"/> (no cursor/palette state).
         /// </summary>
-        private Dictionary<(int, RoutingPhaseKind, int), List<CanvasPoint>> BuildPreRoutes(
+        private Dictionary<(int, RoutingPhaseKind, int), PreSolvedRoute> BuildPreRoutes(
             List<ColourLayer> layers,
-            DrawImageSettings settings
+            DrawImageSettings settings,
+            CancellationToken cancellationToken
         )
         {
             var keys = new List<(int, RoutingPhaseKind, int)>();
@@ -1031,7 +901,9 @@ namespace TomodachiDrawer.Core
                 {
                     foreach (var sbs in l.StampsBySize)
                     {
-                        if (sbs.Value.Count == 0)
+                        // Leave sets small enough for the exact solver to the serial path:
+                        // Held-Karp starts from the live cursor, which we cannot know here.
+                        if (sbs.Value.Count <= ExactMaxPoints)
                             continue;
                         int count = sbs.Value.Count;
                         float t = count > 200 ? 1.5f : (count > 100 ? 1.0f : 0.5f);
@@ -1040,13 +912,13 @@ namespace TomodachiDrawer.Core
                         times.Add(t);
                     }
                 }
-                if (l.FineDetailPoints.Count > 0)
+                if (l.FineDetailPoints.Count > ExactMaxPoints)
                 {
                     keys.Add((layerNumber, RoutingPhaseKind.FineDetail, 1));
                     pts.Add(l.FineDetailPoints.ToList());
                     times.Add(settings.TSPTimeLimit);
                 }
-                if (l.BucketClicks.Count > 0)
+                if (l.BucketClicks.Count > ExactMaxPoints)
                 {
                     int count = l.BucketClicks.Count;
                     float t = count > 50 ? 0.5f : 0.25f;
@@ -1057,51 +929,192 @@ namespace TomodachiDrawer.Core
             }
 
             // ~80% of logical threads — leaves the machine responsive while solving.
-            int threadCount = Math.Max(1, (int)Math.Round(Environment.ProcessorCount * 0.8));
+            int threadCount =
+                _maxParallelism ?? Math.Max(1, (int)Math.Round(Environment.ProcessorCount * 0.8));
             _log($"Pre-solving {keys.Count} routes across {threadCount} threads...");
 
-            var solved = new List<CanvasPoint>[keys.Count];
+            var solved = new PreSolvedRoute[keys.Count];
             Parallel.For(
                 0,
                 keys.Count,
-                new ParallelOptions { MaxDegreeOfParallelism = threadCount },
+                new ParallelOptions
+                {
+                    MaxDegreeOfParallelism = threadCount,
+                    // Upstream only checks the token between layers. For V2 that is nearly useless:
+                    // this pre-solve runs BEFORE the layer loop and is where generation time goes.
+                    CancellationToken = cancellationToken,
+                },
                 i =>
                 {
                     try
                     {
                         var route = RouteSolver.Solve(pts[i], times[i], out _);
-                        solved[i] = route.Count > 0 ? route : pts[i]; // fall back to input order
+                        // Cursor-free nearest-neighbour rather than raw input order: the emission
+                        // path uses NearestNeighbourRoute for the same case, but that one starts
+                        // from the live cursor, which is still on the previous layer here.
+                        solved[i] =
+                            route.Count > 0
+                                ? new PreSolvedRoute(route, IsCycle: true)
+                                : new PreSolvedRoute(
+                                    RouteSolver.NearestNeighbourFrom(pts[i], 0),
+                                    IsCycle: false
+                                );
                     }
                     catch
                     {
-                        // On any solver error, fall back to input order (the serial path tolerates
-                        // null the same way). Never let one job abort the whole generation.
-                        solved[i] = pts[i];
+                        // Never let one job abort the whole generation.
+                        solved[i] = new PreSolvedRoute(
+                            RouteSolver.NearestNeighbourFrom(pts[i], 0),
+                            IsCycle: false
+                        );
                     }
                 }
             );
 
-            var dict = new Dictionary<(int, RoutingPhaseKind, int), List<CanvasPoint>>(keys.Count);
+            var dict = new Dictionary<(int, RoutingPhaseKind, int), PreSolvedRoute>(keys.Count);
             for (int i = 0; i < keys.Count; i++)
                 dict[keys[i]] = solved[i];
             return dict;
         }
 
         /// <summary>
-        /// Returns the route traversed from whichever endpoint is nearest the live cursor (reversing
-        /// if needed) so the initial NavigateTo stays short. Used for parallel pre-solved routes,
-        /// whose depot was fixed at index 0 (not cursor-nearest). Always returns a fresh list, so
-        /// the cached route is never mutated.
+        /// Orients a pre-solved route for emission from the live cursor.
+        /// <para>
+        /// A closed cycle can be cut anywhere, so <see cref="CutCycleNearCursor"/> picks the best of
+        /// all 2n candidates. An <b>open</b> path cannot: cutting it mid-way would make the emission
+        /// traverse a closing arc the solver never paid for. So for those the only valid choices are
+        /// its two existing ends — keep it, or reverse it — which is what the pre-solve's
+        /// nearest-neighbour fallback produces.
+        /// </para>
         /// </summary>
-        private List<CanvasPoint> OrientFromCursor(IReadOnlyList<CanvasPoint> route)
+        private List<CanvasPoint> OrientPreSolved(
+            PreSolvedRoute pre,
+            bool holdsAAcrossAdjacent = false
+        )
         {
-            var result = new List<CanvasPoint>(route);
-            if (result.Count < 2)
-                return result;
-            int dStart = MeasureDistanceToFromCurrent(route[0].X, route[0].Y);
-            int dEnd = MeasureDistanceToFromCurrent(route[^1].X, route[^1].Y);
-            if (dEnd < dStart)
-                result.Reverse();
+            var route = pre.Points;
+            if (pre.IsCycle)
+                return CutCycleNearCursor(route, holdsAAcrossAdjacent);
+
+            int n = route.Count;
+            if (n < 2)
+                return new List<CanvasPoint>(route);
+
+            // Open path: cut only the phantom arc (n-1 -> 0), i.e. start from whichever real end is
+            // nearer the cursor.
+            bool forward =
+                MeasureDistanceToFromCurrent(route[0].X, route[0].Y)
+                <= MeasureDistanceToFromCurrent(route[^1].X, route[^1].Y);
+            return ApplyCut(route, n - 1, forward);
+        }
+
+        /// <summary>
+        /// Picks where to cut a pre-solved <b>cycle</b> so the drawing starts near the live cursor,
+        /// and returns it as a fresh list (the cached route is never mutated).
+        /// <para>
+        /// The parallel pre-solve pins the OrTools depot to index 0 because it runs before emission
+        /// and cannot know each layer's starting cursor. That costs nothing in tour quality — the
+        /// objective is a closed cycle, so the optimum is depot-invariant — but it does mean the
+        /// cycle is written out starting at an arbitrary node. What the serial path gets for free is
+        /// a cursor-adjacent cut; this recovers it, and beats it, because it considers every
+        /// possible cut instead of the one that happens to sit at the depot.
+        /// </para>
+        /// <para>
+        /// A cycle's cost is rotation-invariant, so cutting arc <c>(q_j, q_j+1)</c> drops that arc's
+        /// travel and adds the travel from the cursor to whichever end we start from. Both
+        /// directions fall out of the inner <c>min</c>, so all 2n candidates are covered in one O(n)
+        /// pass.
+        /// </para>
+        /// <para>
+        /// <b>Only valid for cycles.</b> Held-Karp returns an open path with no closing arc, so its
+        /// routes must not come through here.
+        /// </para>
+        /// </summary>
+        /// <param name="holdsAAcrossAdjacent">
+        /// True only for the fine-detail phase, which holds A across Chebyshev-1 neighbours
+        /// (see FineDetailTsp). Cutting such an arc splits a hold run, which costs exactly ONE extra
+        /// press/release group — every tap is the same 25/25ms, so the whole emission cost for a cut
+        /// at arc j is <c>(C - arc_j) + groups(j) + travel_j</c> taps, and
+        /// <c>groups(j) = n - (L1 - s_j)</c> where L1 (the number of Chebyshev-1 arcs in the cycle)
+        /// is constant and <c>s_j</c> is 1 when arc j is short. So the correction is +1 tap, not an
+        /// override. The stamp and bucket phases emit one plain <c>Tap(A)</c> per point with no
+        /// holds at all, so for them the correction must be zero.
+        /// </param>
+        private List<CanvasPoint> CutCycleNearCursor(
+            IReadOnlyList<CanvasPoint> route,
+            bool holdsAAcrossAdjacent = false
+        )
+        {
+            int n = route.Count;
+            if (n < 2)
+                return new List<CanvasPoint>(route);
+
+            var (bestJ, bestForward) = ChooseCut(route, _cursorX, _cursorY, holdsAAcrossAdjacent);
+            return ApplyCut(route, bestJ, bestForward);
+        }
+
+        /// <summary>
+        /// The cut decision, as a pure function of the route and cursor so it can be tested and
+        /// brute-force checked without a live CanvasDrawer. Returns the arc index to cut and whether
+        /// to traverse forwards from its far end.
+        /// </summary>
+        internal static (int CutIndex, bool Forward) ChooseCut(
+            IReadOnlyList<CanvasPoint> route,
+            int cursorX,
+            int cursorY,
+            bool holdsAAcrossAdjacent
+        )
+        {
+            int n = route.Count;
+            int bestJ = 0;
+            long bestScore = long.MaxValue;
+            bool bestForward = true;
+
+            for (int j = 0; j < n; j++)
+            {
+                int nextIdx = (j + 1) % n;
+                int arc = Chebyshev(route[j], route[nextIdx]);
+                int dToJ = Math.Max(Math.Abs(cursorX - route[j].X), Math.Abs(cursorY - route[j].Y));
+                int dToNext = Math.Max(
+                    Math.Abs(cursorX - route[nextIdx].X),
+                    Math.Abs(cursorY - route[nextIdx].Y)
+                );
+
+                // C is the same for every candidate, so it drops out of the comparison.
+                long score = -(long)arc + Math.Min(dToJ, dToNext);
+                if (holdsAAcrossAdjacent && arc <= 1)
+                    score += 1; // the split hold run, priced exactly — one extra press/release
+
+                if (score < bestScore)
+                {
+                    bestScore = score;
+                    bestJ = j;
+                    bestForward = dToNext <= dToJ;
+                }
+            }
+
+            return (bestJ, bestForward);
+        }
+
+        internal static List<CanvasPoint> ApplyCut(
+            IReadOnlyList<CanvasPoint> route,
+            int cutIndex,
+            bool forward
+        )
+        {
+            int n = route.Count;
+            var result = new List<CanvasPoint>(n);
+            if (forward)
+            {
+                int startIdx = (cutIndex + 1) % n;
+                for (int i = 0; i < n; i++)
+                    result.Add(route[(startIdx + i) % n]);
+            }
+            else
+            {
+                for (int i = 0; i < n; i++)
+                    result.Add(route[((cutIndex - i) % n + n) % n]);
+            }
             return result;
         }
 

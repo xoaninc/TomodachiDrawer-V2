@@ -1,7 +1,4 @@
-﻿using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
-using SixLabors.ImageSharp.Processing.Processors.Quantization;
+using JeremyAnsel.ColorQuant;
 using SkiaSharp;
 
 namespace TomodachiDrawer.Core.ImageProcessing.Quantizers
@@ -11,79 +8,56 @@ namespace TomodachiDrawer.Core.ImageProcessing.Quantizers
     /// </summary>
     public class ArbitraryColourQuantizer
     {
-        public static SKBitmap Quantize(SKBitmap input, int colourCount, bool useDithering = true)
+        public static SKBitmap Quantize(SKBitmap input, int colourCount)
         {
-            if (colourCount < 1)
+            if (colourCount < 1 || colourCount > 256)
                 throw new ArgumentOutOfRangeException(
                     nameof(colourCount),
-                    "Colour count must be at least 1."
+                    "Colour count must be at least 1 and less than or equal to 256."
                 );
 
-            using var image = ToImageSharp(input);
+            int pixelCount = input.Width * input.Height;
+            SKColor[] srcPixels = input.Pixels;
 
-            var quantizer = new WuQuantizer(
-                new QuantizerOptions
-                {
-                    MaxColors = colourCount,
-                    Dither = useDithering ? KnownDitherings.FloydSteinberg : null,
-                }
-            );
-
-            image.Mutate(x => x.Quantize(quantizer));
-
-            return ToSkBitmap(image);
-        }
-
-        private static Image<Rgba32> ToImageSharp(SKBitmap bitmap)
-        {
-            var image = new Image<Rgba32>(bitmap.Width, bitmap.Height);
-            var pixels = bitmap.Pixels;
-
-            image.ProcessPixelRows(accessor =>
+            // WuAlphaColorQuantizer takes in a byte array instead of an ImageSharp type so we need to convert to that.
+            // https://github.com/JeremyAnsel/JeremyAnsel.ColorQuant/blob/6d79217e72af9e3af1a8a29c606732adac1e8d87/JeremyAnsel.ColorQuant/JeremyAnsel.ColorQuant/WuAlphaColorQuantizer2.cs#L454-L457
+            byte[] bgra = new byte[pixelCount * 4];
+            for (int i = 0; i < pixelCount; i++)
             {
-                for (int y = 0; y < bitmap.Height; y++)
+                SKColor p = srcPixels[i];
+                if (p.Alpha < 128)
                 {
-                    var row = accessor.GetRowSpan(y);
-                    for (int x = 0; x < bitmap.Width; x++)
-                    {
-                        var p = pixels[y * bitmap.Width + x];
-                        //row[x] = new Rgba32(p.Red, p.Green, p.Blue, p.Alpha);
-                        // need to handle transparency
-                        if (p.Alpha < 128)
-                        {
-                            row[x] = new Rgba32(0, 0, 0, 0);
-                        }
-                        else
-                        {
-                            row[x] = new Rgba32(p.Red, p.Green, p.Blue, 255);
-                        }
-                    }
+                    bgra[i * 4 + 0] = 0;
+                    bgra[i * 4 + 1] = 0;
+                    bgra[i * 4 + 2] = 0;
+                    bgra[i * 4 + 3] = 0;
                 }
-            });
+                else
+                {
+                    bgra[i * 4 + 0] = p.Blue;
+                    bgra[i * 4 + 1] = p.Green;
+                    bgra[i * 4 + 2] = p.Red;
+                    bgra[i * 4 + 3] = 255;
+                }
+            }
 
-            return image;
-        }
+            var quantizer = new WuAlphaColorQuantizer();
+            ColorQuantizerResult result = quantizer.Quantize(bgra, colourCount);
 
-        private static SKBitmap ToSkBitmap(Image<Rgba32> image)
-        {
-            var bitmap = new SKBitmap(image.Width, image.Height);
-            var pixels = new SKColor[image.Width * image.Height];
-
-            image.ProcessPixelRows(accessor =>
+            // Kicks out a Palette and bytes array of indices into that palette. Limit is 256 colours because of this.
+            var bitmap = new SKBitmap(input.Width, input.Height);
+            SKColor[] dstPixels = new SKColor[pixelCount];
+            for (int i = 0; i < pixelCount; i++)
             {
-                for (int y = 0; y < image.Height; y++)
-                {
-                    var row = accessor.GetRowSpan(y);
-                    for (int x = 0; x < image.Width; x++)
-                    {
-                        var p = row[x];
-                        pixels[y * image.Width + x] =
-                            p.A < 128 ? SKColors.Transparent : new SKColor(p.R, p.G, p.B, 255);
-                    }
-                }
-            });
+                int idx = result.Bytes[i] * 4;
+                byte b = result.Palette[idx + 0];
+                byte g = result.Palette[idx + 1];
+                byte r = result.Palette[idx + 2];
+                byte a = result.Palette[idx + 3];
+                dstPixels[i] = a < 128 ? SKColors.Transparent : new SKColor(r, g, b, 255);
+            }
 
-            bitmap.Pixels = pixels;
+            bitmap.Pixels = dstPixels;
             return bitmap;
         }
     }

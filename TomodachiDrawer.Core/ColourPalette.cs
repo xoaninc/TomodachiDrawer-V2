@@ -1,5 +1,4 @@
 ﻿using SkiaSharp;
-
 using TomodachiDrawer.Core.ImageProcessing;
 using TomodachiDrawer.Core.ImageProcessing.Denoising;
 using TomodachiDrawer.Core.ImageProcessing.Quantizers;
@@ -195,17 +194,24 @@ namespace TomodachiDrawer.Core
 
                 SKBitmap quantized = ArbitraryColourQuantizer.Quantize(
                     source,
-                    (int)quantizerSettings.colourCount,
-                    quantizerSettings.useDithering ?? default
+                    (int)quantizerSettings.colourCount
                 );
                 SKColor[] pixels = quantized.Pixels;
 
-                var skToPalette = pixels
-                    .Where(c => c.Alpha > 128)
-                    .Distinct()
-                    .ToDictionary(
-                        d => d,
-                        d => new PaletteColour(
+                // Colours are mapped to the number of HSV steps
+                // So that extremely similar RGB codes that result in the same HSV inputs (and thus, the same colour in game)
+                // are combined to avoid redundant layers.
+                // Technically, this can cause the number of Arbitrary colours set to not equal the resulting number
+                // of layers but the end result would be the same anyway, so we take the savings.
+                var keyToPalette = new Dictionary<(int, int, int), PaletteColour>();
+                var skToPalette = new Dictionary<SKColor, PaletteColour>();
+
+                foreach (var d in pixels.Where(c => c.Alpha > 128).Distinct())
+                {
+                    var key = ColourPickerRouter.CanonicalKey(d);
+                    if (!keyToPalette.TryGetValue(key, out var canonical))
+                    {
+                        canonical = new PaletteColour(
                             $"({d.Red}, {d.Green}, {d.Blue})",
                             d.Red,
                             d.Green,
@@ -214,8 +220,11 @@ namespace TomodachiDrawer.Core
                             null,
                             d,
                             true
-                        )
-                    );
+                        );
+                        keyToPalette[key] = canonical;
+                    }
+                    skToPalette[d] = canonical;
+                }
 
                 var output = new PaletteColour?[width, height];
                 for (int y = 0; y < height; y++)
@@ -301,7 +310,10 @@ namespace TomodachiDrawer.Core
 
             if (!_hotbarHomed)
             {
-                Console.WriteLine("Homing hotbar, hasnt been done yet.");
+                // Was a bare Console.WriteLine, which bypassed the host's logger and printed to
+                // stdout for every consumer of Core — including every bench run.
+                // ColourPalette has no logger, and threading one in for a single once-per-draw
+                // trace is not worth it, so it is simply dropped.
                 // We need to home, could be at an unknown position.
                 // Slam against the top so we know that, and go down from the header.
                 for (int i = 0; i < HotbarSlots + HotbarHeaderRows; i++)
@@ -349,9 +361,12 @@ namespace TomodachiDrawer.Core
 
                 // Determine which way we home for shorter travel.
                 // If we are past the halfway point, use the opposite side.
-                bool hueHomeLeft = steps.HueSteps <= (ColourPickerRouter.FCR_HUE_SLIDER_STEP_COUNT - 1) / 2;
-                bool satHomeRight = steps.SatSteps <= (ColourPickerRouter.FCR_SATURATION_STEP_COUNT - 1) / 2;
-                bool valHomeTop = steps.ValSteps <= (ColourPickerRouter.FCR_VALUE_STEP_COUNT - 1) / 2;
+                bool hueHomeLeft =
+                    steps.HueSteps <= (ColourPickerRouter.FCR_HUE_SLIDER_STEP_COUNT - 1) / 2;
+                bool satHomeRight =
+                    steps.SatSteps <= (ColourPickerRouter.FCR_SATURATION_STEP_COUNT - 1) / 2;
+                bool valHomeTop =
+                    steps.ValSteps <= (ColourPickerRouter.FCR_VALUE_STEP_COUNT - 1) / 2;
 
                 // Use stick for quicker homing
                 _realOutput.SetStick(Stick.LX, satHomeRight ? (byte)255 : (byte)0);

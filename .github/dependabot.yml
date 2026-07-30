@@ -1,0 +1,17 @@
+version: 2
+updates:
+  # `directory: /` scans every .csproj in the repo, so the Bench and Core.Tests projects are
+  # covered without listing paths.
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: daily
+    groups:
+      avalonia:
+        patterns:
+          - "Avalonia*"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

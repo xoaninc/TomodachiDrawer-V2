@@ -26,7 +26,6 @@ using Button = Avalonia.Controls.Button; // conflict with the Button enum in Sin
 using TomodachiDrawer.DebugTools;
 #endif
 
-
 namespace TomodachiDrawer.UI.Avalonia;
 
 public partial class MainWindow : Window
@@ -323,10 +322,39 @@ public partial class MainWindow : Window
         base.OnClosed(e);
     }
 
-    // Check if we can access the RP2040 drive.
-    // Also trigger permission prompt on macOS if we haven't been granted permissions yet.
+    /// <summary>
+    /// The macOS permission-denied dialog, with a deep link into the right Settings pane and the
+    /// manual-copy escape hatch. Extracted so both the pre-check and the write itself can show it —
+    /// upstream found in the field that passing the pre-check does not guarantee the write succeeds.
+    /// </summary>
+    /// <param name="retryBlurb">Set when the caller will retry after the dialog closes.</param>
+    private Task ShowMacAccessError(string drivePath, string driveName, bool retryBlurb = false)
+    {
+        var additional = retryBlurb
+            ? "\n\nGrant the permission, then click OK and the app will try to write again."
+            : string.Empty;
+
+        return ShowMessageAsync(
+            "Permission Denied",
+            $"Permission to access the {driveName} drive ({drivePath}) was denied.\n\n"
+                + "Please open System Settings -> Privacy & Security -> Files & Folders, find \"TomodachiDrawer\", and make sure \"Removable Volumes\" is enabled.\n\n"
+                + $"This is required for the app to write directly to your {driveName} drive.\r"
+                + $"Or you can manually copy the .uf2 file to {drivePath} if you want to avoid granting permissions."
+                + additional,
+            new Uri(
+                "x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders"
+            ),
+            "Open System Settings"
+        );
+    }
+
+    // Check if we can access the microcontroller's drive.
+    // Also triggers the permission prompt on macOS if we haven't been granted permissions yet.
     // Returns `true` if we can access it.
-    private bool CanAccessRP2040Drive(string drivePath)
+    //
+    // NOTE: a `true` here is not a guarantee the subsequent write will succeed — upstream saw
+    // exactly that happen in the field. Callers must still guard the write.
+    private bool CanAccessPicoDrive(string drivePath, string driveName = "RPI-RP2")
     {
         try
         {
@@ -339,27 +367,16 @@ public partial class MainWindow : Window
         {
             // macOS: User (probably) clicked "Don't Allow".
             if (OperatingSystem.IsMacOS())
-            {
-                _ = ShowMessageAsync(
-                    "Permission Denied",
-                    $"Permission to access the RPI-RP2 drive ({drivePath}) was denied.\n\n"
-                        + "Please open System Settings -> Privacy & Security -> Files & Folders, find \"TomodachiDrawer\", and make sure \"Removable Volumes\" is enabled.\n\n"
-                        + "This is required for the app to write the firmware directly to your RPI-RP2 drive.\r"
-                        + $"Or you can manually copy the .uf2 file to {drivePath} if you want to avoid granting permissions.",
-                    new Uri(
-                        "x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders"
-                    ),
-                    "Open System Settings"
-                );
-            }
+                _ = ShowMacAccessError(drivePath, driveName);
+
             // Log the error. Just in case, log on other OSes as well.
-            AppendLog($"Permission to access RPI-RP2 drive ({drivePath}) was denied");
+            AppendLog($"Permission to access {driveName} drive ({drivePath}) was denied");
             return false;
         }
         catch (Exception ex)
         {
             // Also just in case, log any other error that might occur while trying to access the drive.
-            AppendLog($"Could not access the RPI-RP2 drive ({drivePath}): {ex.Message}");
+            AppendLog($"Could not access the {driveName} drive ({drivePath}): {ex.Message}");
             return false;
         }
     }
@@ -977,18 +994,39 @@ public partial class MainWindow : Window
 
                 var uf2Bytes = UF2Flasher.BuildTDLDUF2(tdldBytes, chip);
                 var drivePath = UF2Flasher.FindDriveForChip(chip);
+                var driveName = chip == RPChipType.RP2350 ? "RP2350" : "RPI-RP2";
 
-                if (
-                    uf2Bytes != null
-                    && uf2Bytes.Length > 0
-                    && drivePath != null
-                    && CanAccessRP2040Drive(drivePath)
-                )
+                if (uf2Bytes == null || uf2Bytes.Length == 0)
                 {
-                    File.WriteAllBytes(Path.Combine(drivePath, "tdld_image.uf2"), uf2Bytes);
-                    AppendLog(
-                        $"Wrote to {chip} flash. Unplug the {chip} and plug it into the switch without holding any button."
+                    // Previously this fell through silently: the user waited out a whole generation
+                    // and got no log, no dialog, nothing.
+                    AppendLog($"{chip} export failed: produced an empty UF2.");
+                    _ = ShowMessageAsync(
+                        "Export failed",
+                        "The UF2 came out empty, so nothing was written. This shouldn't happen — "
+                            + "please report it with the log."
                     );
+                }
+                else if (drivePath == null)
+                {
+                    AppendLog(
+                        $"{chip} export failed: the drive disappeared between detection and writing."
+                    );
+                    _ = ShowMessageAsync(
+                        "Device disconnected",
+                        $"The {chip} was detected when you pressed the button but is gone now, so "
+                            + "nothing was written.\n\nReconnect it in BOOT mode and try again — the "
+                            + "generated route is cached, so this will be quick."
+                    );
+                }
+                else if (!CanAccessPicoDrive(drivePath, driveName))
+                {
+                    // CanAccessPicoDrive already logged and, on macOS, explained how to fix it.
+                    AppendLog($"{chip} export aborted: the {driveName} drive is not accessible.");
+                }
+                else
+                {
+                    await WriteUf2WithRetryAsync(drivePath, driveName, uf2Bytes, chip);
                 }
             });
         }
@@ -1140,6 +1178,65 @@ public partial class MainWindow : Window
         }
 
         SetEstimate(totalTime);
+    }
+
+    /// <summary>
+    /// Writes the UF2, and on a permission/IO failure explains it and retries <b>once</b> after the
+    /// user has had the chance to grant access.
+    /// <para>
+    /// This exists because <see cref="CanAccessPicoDrive"/> returning true is not a guarantee —
+    /// upstream discovered from crash reports that the write can still be denied right after the
+    /// pre-check passes. Without this the failure surfaced as a bare
+    /// "Access to the path is denied", with no guidance and no second chance.
+    /// </para>
+    /// </summary>
+    private async Task WriteUf2WithRetryAsync(
+        string drivePath,
+        string driveName,
+        byte[] uf2Bytes,
+        RPChipType chip
+    )
+    {
+        var target = Path.Combine(drivePath, "tdld_image.uf2");
+
+        for (int attempt = 1; attempt <= 2; attempt++)
+        {
+            try
+            {
+                File.WriteAllBytes(target, uf2Bytes);
+                AppendLog(
+                    $"Wrote to {chip} flash. Unplug the {chip} and plug it into the switch without holding any button."
+                );
+                return;
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+            {
+                bool lastAttempt = attempt == 2;
+                AppendLog(
+                    $"Writing to {target} failed ({ex.GetType().Name}: {ex.Message})"
+                        + (lastAttempt ? "." : " — asking for access and retrying once.")
+                );
+
+                if (lastAttempt)
+                {
+                    _ = ShowMessageAsync(
+                        "Write failed",
+                        $"Could not write to {target}.\n\n{ex.Message}\n\n"
+                            + "You can still use \"Export to .UF2\" and copy the file to the drive by hand."
+                    );
+                    return;
+                }
+
+                if (OperatingSystem.IsMacOS())
+                    await ShowMacAccessError(drivePath, driveName, retryBlurb: true);
+                else
+                    await ShowMessageAsync(
+                        "Write failed",
+                        $"Could not write to {target}.\n\n{ex.Message}\n\n"
+                            + "Close anything that might be using the drive, then click OK to retry."
+                    );
+            }
+        }
     }
 
     private void SetEstimate(TimeSpan time)
@@ -1411,7 +1508,7 @@ public partial class MainWindow : Window
             _ = ShowMessageAsync("Error", $"{chip} not detected. Connect it in BOOT mode first.");
             return;
         }
-        if (!CanAccessRP2040Drive(drivePath))
+        if (!CanAccessPicoDrive(drivePath))
         {
             return;
         }

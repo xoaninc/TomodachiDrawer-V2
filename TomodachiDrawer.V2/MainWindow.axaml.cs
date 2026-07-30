@@ -73,7 +73,11 @@ public partial class MainWindow : Window
 
         DenoisingComboBox.ItemsSource = denoiserSelection;
         DenoisingComboBox.SelectedIndex = 0;
-        DenoisingComboBox.SelectionChanged += (_, _) => UpdatePreview();
+        DenoisingComboBox.SelectionChanged += (_, _) =>
+        {
+            UpdatePreview();
+            DrawingOptionChanged();
+        };
 
         InitializeTemplates();
 
@@ -819,6 +823,7 @@ public partial class MainWindow : Window
             UpdatePreview();
         ColourLimitUpDown.IsEnabled =
             ColourMatcherComboBox?.SelectedValue?.ToString() == "Arbitrary";
+        DrawingOptionChanged();
     }
 
     private void TSPHelpButton_Click(object? sender, RoutedEventArgs e)
@@ -923,6 +928,10 @@ public partial class MainWindow : Window
             DisableLargeBrush = false,
             EnableExperimentalFeatures = enableExperimental,
             HomeToTopLeft = enableHome,
+            ReverseColourOrder = ReverseColourOrderCheckBox.IsChecked ?? false,
+            EarlyTspExitEnabled = _currentSettings.EarlyTspExitEnabled,
+            EarlyTspExitRateCoefficient = _currentSettings.EarlyTspExitRateCoefficient,
+            EarlyTspExitSolutionsDistance = _currentSettings.EarlyTspExitSolutionsDistance,
         };
     }
 
@@ -1317,74 +1326,73 @@ public partial class MainWindow : Window
         );
     }
 
-    private static string GetSettingsFilePath()
-    {
-        const string settingsFileName = "settings.json";
-
-        // Check if we're running on macOS and the app is running from the app bundle, not CLI.
-        if (OperatingSystem.IsMacOS() && AppContext.BaseDirectory.Contains(".app/Contents/MacOS"))
-        {
-            // In macOS, when you launch `.app` from Finder, the current working directory is root directory `/` (Gemini said),
-            // which is read-only and not a good place to store our settings file.
-            // We need to place the settings file somewhere else.
-            // `~/Library/Application Support` is a common place to store app data on macOS (like `%APPDATA%` on Windows).
-            // So first, ensure `~/Library/Application Support/TomodachiDrawer` exists
-            var appDataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "TomodachiDrawer");
-            if (!Directory.Exists(appDataFolder))
-            {
-                Directory.CreateDirectory(appDataFolder);
-            }
-            // Returns `~/Library/Application Support/TomodachiDrawer/settings.json`
-            return Path.Combine(appDataFolder, settingsFileName);
-        }
-        else
-        {
-            // Simply place it in the current working directory
-            return settingsFileName;
-        }
-    }
-
-    private void SaveSettings()
-    {
-        var json = JsonSerializer.Serialize(_currentSettings, AppSettingsContext.Default.AppSettings);
-        File.WriteAllText(GetSettingsFilePath(), json);
-    }
+    private void SaveSettings() => _currentSettings.Save();
 
     private void GetSettings()
     {
-        var settingsFilePath = GetSettingsFilePath();
+        _currentSettings = AppSettings.Load(out var warning);
+        if (warning != null)
+            AppendLog(warning);
 
-        if (File.Exists(settingsFilePath))
-        {
-            try
-            {
-                var json = File.ReadAllText(settingsFilePath);
-                var settings = JsonSerializer.Deserialize(json, AppSettingsContext.Default.AppSettings);
-
-                if (settings != null)
-                {
-                    _currentSettings = settings;
-                }
-            }
-            catch (Exception)
-            {
-                AppendLog("Failed to load settings. Using defaults.");
-            }
-        }
-
-        // if no images or we fail, fall to defaults in the appsettings class.
-        _currentSettings ??= new AppSettings();
-
-        SwitchVersionComboBox.SelectedIndex =
-            (int)_currentSettings.SelectedSwitchVersion - 1;
+        SwitchVersionComboBox.SelectedIndex = (int)_currentSettings.SelectedSwitchVersion - 1;
         SetTheme(_currentSettings.SelectedThemeIndex);
         ThemeSystemMenuItem.IsChecked = _currentSettings.SelectedThemeIndex == 0;
         ThemeLightMenuItem.IsChecked = _currentSettings.SelectedThemeIndex == 1;
         ThemeDarkMenuItem.IsChecked = _currentSettings.SelectedThemeIndex == 2;
 
-        EnableExperimentalMenuItem.IsChecked =
-            _currentSettings.EnableExperimentalFeatures;
+        EnableExperimentalMenuItem.IsChecked = _currentSettings.EnableExperimentalFeatures;
         CheckForUpdatesCheckBox.IsChecked = _currentSettings.CheckForUpdatesOnStart;
+
+        // Restore the drawing options. _loadingSettings suppresses the change handlers so
+        // restoring a value cannot immediately write it back or kick off a preview rebuild.
+        _loadingSettings = true;
+        try
+        {
+            if (
+                ColourMatcherComboBox.ItemsSource is IEnumerable<string> matchers
+                && matchers.Contains(_currentSettings.ColourMatcherName)
+            )
+                ColourMatcherComboBox.SelectedItem = _currentSettings.ColourMatcherName;
+
+            ColourLimitUpDown.Value = _currentSettings.ColourLimit;
+            ColourLimitUpDown.IsEnabled =
+                ColourMatcherComboBox?.SelectedValue?.ToString() == "Arbitrary";
+
+            if (
+                DenoisingComboBox.ItemsSource is IEnumerable<string> denoisers
+                && denoisers.Contains(_currentSettings.DenoiserName)
+            )
+                DenoisingComboBox.SelectedItem = _currentSettings.DenoiserName;
+
+            EnableHomeCanvas.IsChecked = _currentSettings.HomeToTopLeft;
+            ReverseColourOrderCheckBox.IsChecked = _currentSettings.ReverseColourOrder;
+        }
+        finally
+        {
+            _loadingSettings = false;
+        }
+    }
+
+    /// <summary>
+    /// Set while restoring persisted settings into controls, so the SelectionChanged/Click handlers
+    /// do not treat a restore as a user edit (which would save it straight back and rebuild the
+    /// preview before an image is even loaded).
+    /// </summary>
+    private bool _loadingSettings;
+
+    /// <summary>Persists whichever drawing option the user just changed.</summary>
+    private void DrawingOptionChanged()
+    {
+        if (_loadingSettings)
+            return;
+
+        _currentSettings.ColourMatcherName =
+            ColourMatcherComboBox.SelectedItem?.ToString() ?? "Arbitrary";
+        _currentSettings.ColourLimit = (int)(ColourLimitUpDown.Value ?? 16);
+        _currentSettings.DenoiserName = DenoisingComboBox.SelectedItem?.ToString() ?? "None";
+        _currentSettings.HomeToTopLeft = EnableHomeCanvas.IsChecked ?? false;
+        _currentSettings.ReverseColourOrder = ReverseColourOrderCheckBox.IsChecked ?? false;
+        SaveSettings();
     }
 
     private void SwitchVersionComboBox_SelectionChanged(object? sender, SelectionChangedEventArgs e)
@@ -1582,5 +1590,13 @@ public partial class MainWindow : Window
     private void EnableHomeCanvas_IsCheckedChanged(object? sender, RoutedEventArgs e)
     {
         // TODO: Notify if non 256x256 image.
+        DrawingOptionChanged();
+    }
+
+    private void ReverseColourOrderCheckBox_IsCheckedChanged(object? sender, RoutedEventArgs e)
+    {
+        DrawingOptionChanged();
+        if (_currentImage != null)
+            UpdatePreview();
     }
 }

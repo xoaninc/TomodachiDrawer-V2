@@ -38,6 +38,7 @@ namespace TomodachiDrawer.Bench
             long DPadTaps,
             long PaintActions,
             long HoldRuns,
+            int Layers,
             long StickMoves,
             double DrawSeconds,
             double GenerateSeconds,
@@ -57,9 +58,15 @@ namespace TomodachiDrawer.Bench
             string? outPath = OptionalArg(args, "--out");
             string? renderDir = OptionalArg(args, "--render-out");
 
+            // Upstream's colour merge is on in production and always has been, so every number in
+            // Docs/bench/ already includes it and none of them say what it is worth. This turns it
+            // off so the difference can be read directly off `layers=` and `draw=`.
+            bool mergeColours = !args.Contains("--no-colour-merge");
+
             Console.WriteLine(
                 $"tsp={tspLimit}s repeats={repeats} quantizer={quantizer} colours={colours} "
                     + $"switch={version} cores={Environment.ProcessorCount} "
+                    + $"colour-merge={(mergeColours ? "on" : "OFF")} "
                     + $"config={(IsDebug() ? "DEBUG (wall-clock not meaningful)" : "RELEASE")}"
             );
 
@@ -69,7 +76,17 @@ namespace TomodachiDrawer.Bench
             // first cell of every baseline.
             Console.Write("warming up... ");
             using (var warm = TestImages.All()[0].Bitmap)
-                await RunOnce("warmup", warm, Arms[0], 0.1f, quantizer, 8, version, null);
+                await RunOnce(
+                    "warmup",
+                    warm,
+                    Arms[0],
+                    0.1f,
+                    quantizer,
+                    8,
+                    version,
+                    null,
+                    mergeColours
+                );
             Console.WriteLine("done");
 
             var results = new List<Result>();
@@ -92,7 +109,8 @@ namespace TomodachiDrawer.Bench
                             quantizer,
                             colours,
                             version,
-                            renderDir
+                            renderDir,
+                            mergeColours
                         );
                         if (best is null || r.DPadTaps < best.DPadTaps)
                             best = r;
@@ -100,7 +118,7 @@ namespace TomodachiDrawer.Bench
                     results.Add(best!);
                     Console.WriteLine(
                         $"  {name, -10} {arm.Name, -16} dpad={best!.DPadTaps, 8}  paint={best.PaintActions, 7}  "
-                            + $"runs={best.HoldRuns, 6}  "
+                            + $"runs={best.HoldRuns, 6}  layers={best.Layers, 3}  "
                             + $"draw={best.DrawSeconds, 9:F1}s  gen={best.GenerateSeconds, 6:F2}s"
                             + $"\n{new string(' ', 30)}render: {best.Comparison}"
                     );
@@ -138,7 +156,8 @@ namespace TomodachiDrawer.Bench
             string quantizer,
             int colours,
             SwitchVersion version,
-            string? renderDir
+            string? renderDir,
+            bool mergeColours
         )
         {
             var settings = new DrawImageSettings
@@ -159,7 +178,8 @@ namespace TomodachiDrawer.Bench
                 _ => { },
                 parallelSolves: arm.Parallel,
                 maxParallelism: arm.MaxParallelism,
-                trace: renderer
+                trace: renderer,
+                mergeIdenticalInGameColours: mergeColours
             );
 
             var sw = Stopwatch.StartNew();
@@ -174,7 +194,9 @@ namespace TomodachiDrawer.Bench
             // Compare against the QUANTIZED source, not the raw image: the palette legitimately
             // moves colours, so diffing the original would fail on nearly every pixel and say
             // nothing about whether the drawing is right.
-            using var expected = QuantizedReference(bmp, settings);
+            // Must use the same merge setting, or with --no-colour-merge the reference would be
+            // quantized differently from what was drawn and every pixel would read as a mismatch.
+            using var expected = QuantizedReference(bmp, settings, mergeColours);
             var comparison = renderer.CompareTo(expected);
 
             if (renderDir != null && name != "warmup")
@@ -195,6 +217,7 @@ namespace TomodachiDrawer.Bench
                 metrics.DPadTaps,
                 metrics.PaintActions,
                 metrics.HoldRuns,
+                renderer.DistinctColours,
                 metrics.StickMoves,
                 timing.TotalSeconds,
                 sw.Elapsed.TotalSeconds,
@@ -213,10 +236,14 @@ namespace TomodachiDrawer.Bench
         /// The image as the drawer sees it after quantization — one pixel per palette colour, and
         /// transparent where the drawer would not paint.
         /// </summary>
-        private static SKBitmap QuantizedReference(SKBitmap source, DrawImageSettings settings)
+        private static SKBitmap QuantizedReference(
+            SKBitmap source,
+            DrawImageSettings settings,
+            bool mergeColours
+        )
         {
             var palette = new ColourPalette(new DummySink());
-            var map = palette.QuantizeImage(source, settings.QuantizerSettings);
+            var map = palette.QuantizeImage(source, settings.QuantizerSettings, mergeColours);
 
             var bmp = new SKBitmap(source.Width, source.Height);
             var px = new SKColor[source.Width * source.Height];

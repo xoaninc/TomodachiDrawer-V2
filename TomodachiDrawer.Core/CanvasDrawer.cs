@@ -47,13 +47,20 @@ namespace TomodachiDrawer.Core
         /// </summary>
         private readonly IDrawTrace? _trace;
 
+        /// <summary>
+        /// Always true in production. False only from the bench, to measure what upstream's colour
+        /// merge is actually worth — see <c>ColourPalette.QuantizeImage</c>.
+        /// </summary>
+        private readonly bool _mergeIdenticalInGameColours = true;
+
         public CanvasDrawer(
             ISwitchOutput outputSink,
             SwitchVersion switchVersion,
             Action<string>? logger = null,
             bool parallelSolves = false,
             int? maxParallelism = null,
-            IDrawTrace? trace = null
+            IDrawTrace? trace = null,
+            bool mergeIdenticalInGameColours = true
         )
         {
             _realOutput = outputSink;
@@ -63,6 +70,7 @@ namespace TomodachiDrawer.Core
             _parallelSolves = parallelSolves;
             _maxParallelism = maxParallelism is int m ? Math.Max(1, m) : null;
             _trace = trace;
+            _mergeIdenticalInGameColours = mergeIdenticalInGameColours;
 
             if (switchVersion == SwitchVersion.None)
                 throw new ArgumentOutOfRangeException(
@@ -111,18 +119,19 @@ namespace TomodachiDrawer.Core
             }
 
             // Quantized Map is a 2D array of PaletteColours.
-            var quantizedMap = _palette.QuantizeImage(image, settings.QuantizerSettings);
+            var quantizedMap = _palette.QuantizeImage(
+                image,
+                settings.QuantizerSettings,
+                _mergeIdenticalInGameColours
+            );
 
             // First off we are just putting all the individual details into the fine detail pass,
             // following passes will start to remove from that and add to the stamp passes.
             // TODO: This doesnt really make too much sense to be in the palette class... Maybe move here?
             var layers = _palette.BuildFineLayers(quantizedMap);
 
-            if (settings.ReverseColourOrder)
-            {
-                layers.Reverse();
-                _log("Reversed colour layer order");
-            }
+            // NOTE: ReverseColourOrder is applied further down, after the layer order is optimised —
+            // reversing here would just be undone by LayerOrder.Optimise.
 
             // If we're a full size 256x256 image, or the user just asks for it, we'll home to 0,0 on the canvas automatically.
             if (settings.HomeToTopLeft)
@@ -222,6 +231,28 @@ namespace TomodachiDrawer.Core
                 {
                     DetectUniformAreas(l, image.Width, image.Height);
                 }
+            }
+
+            // LAYER ORDER. Upstream's TODO at the top of this method, finally done: switching layers
+            // costs colour-picker navigation plus travel from where the last layer ended to where the
+            // next one starts, and both depend on the order.
+            //
+            // This MUST happen before BuildPreRoutes. Pre-solved routes are keyed by the layer's
+            // *position* in this list, so reordering afterwards would hand layer A's route to layer B
+            // and paint A's shape in B's colour.
+            long orderCostBefore = LayerOrder.CostOf(layers, _cursorX, _cursorY);
+            layers = LayerOrder.Optimise(layers, _cursorX, _cursorY);
+            long orderCostAfter = LayerOrder.CostOf(layers, _cursorX, _cursorY);
+            _log(
+                $"Ordered {layers.Count} colour layers: inter-layer cost {orderCostBefore} -> {orderCostAfter} taps"
+            );
+
+            // Reversing an ordering preserves its total inter-layer cost, so the setting stays
+            // meaningful and costs nothing on top of the optimisation.
+            if (settings.ReverseColourOrder)
+            {
+                layers.Reverse();
+                _log("\tReversed colour layer order (setting)");
             }
 
             // PARALLEL PRE-SOLVE: with all layers/phases now fixed, solve every (independent) TSP

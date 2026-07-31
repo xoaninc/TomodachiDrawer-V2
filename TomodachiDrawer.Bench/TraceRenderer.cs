@@ -39,6 +39,16 @@ namespace TomodachiDrawer.Bench
         /// route is revisiting cells.</summary>
         public long Overdraws { get; private set; }
 
+        private readonly HashSet<uint> _coloursUsed = [];
+
+        /// <summary>
+        /// How many distinct colours the drawing actually selected — i.e. the layer count, read off
+        /// the trace rather than plumbed out of the drawer. This is what makes upstream's colour merge
+        /// measurable: the merge collapses colours reaching the same in-game HSV steps, so its whole
+        /// effect is visible here as a smaller number.
+        /// </summary>
+        public int DistinctColours => _coloursUsed.Count;
+
         public void EraseAll() => Array.Fill(_cells, Unpainted);
 
         public void Stamp(SKColor colour, int brushSize, int x, int y)
@@ -80,6 +90,10 @@ namespace TomodachiDrawer.Bench
 
         private void Set(int x, int y, SKColor colour)
         {
+            // Counted before the bounds check: selecting a colour is what costs a picker trip, and
+            // that happens whether or not the cell it paints lands on the canvas.
+            _coloursUsed.Add((uint)colour);
+
             if (!InBounds(x, y))
                 return; // the drawer clamps stamps away from the edges; be forgiving anyway
             int i = Index(x, y);

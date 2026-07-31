@@ -178,8 +178,24 @@ namespace TomodachiDrawer.Core
         }
 
         /// <summary>Map an image to PaletteColours</summary>
+        /// <param name="mergeIdenticalInGameColours">
+        /// Collapse colours that reach the same in-game HSV steps into one layer. On in production —
+        /// it is a straight saving. The switch exists so the bench can <b>measure</b> what the merge
+        /// is worth, which is otherwise unknowable: the merge landed before the measurement baseline
+        /// was taken, so every recorded number already includes it.
+        /// <para>
+        /// Deliberately a parameter here rather than a <c>DrawImageSettings</c> field. It is a
+        /// measurement control, not a preference — putting it in settings would place it in
+        /// <c>RouteFingerprint</c> and expose a user-facing switch whose only effect is longer
+        /// drawings.
+        /// </para>
+        /// </param>
         /// <returns>2D array of PaletteColour? [x, y] of the appropriate colours.</returns>
-        public PaletteColour?[,] QuantizeImage(SKBitmap source, QuantizerSettings quantizerSettings)
+        public PaletteColour?[,] QuantizeImage(
+            SKBitmap source,
+            QuantizerSettings quantizerSettings,
+            bool mergeIdenticalInGameColours = true
+        )
         {
             int width = source.Width,
                 height = source.Height;
@@ -206,21 +222,32 @@ namespace TomodachiDrawer.Core
                 var keyToPalette = new Dictionary<(int, int, int), PaletteColour>();
                 var skToPalette = new Dictionary<SKColor, PaletteColour>();
 
+                static PaletteColour Arbitrary(SKColor d) =>
+                    new(
+                        $"({d.Red}, {d.Green}, {d.Blue})",
+                        d.Red,
+                        d.Green,
+                        d.Blue,
+                        null,
+                        null,
+                        d,
+                        true
+                    );
+
                 foreach (var d in pixels.Where(c => c.Alpha > 128).Distinct())
                 {
+                    if (!mergeIdenticalInGameColours)
+                    {
+                        // Measurement mode only: one layer per distinct RGB, including several that
+                        // would select the identical in-game colour.
+                        skToPalette[d] = Arbitrary(d);
+                        continue;
+                    }
+
                     var key = ColourPickerRouter.CanonicalKey(d);
                     if (!keyToPalette.TryGetValue(key, out var canonical))
                     {
-                        canonical = new PaletteColour(
-                            $"({d.Red}, {d.Green}, {d.Blue})",
-                            d.Red,
-                            d.Green,
-                            d.Blue,
-                            null,
-                            null,
-                            d,
-                            true
-                        );
+                        canonical = Arbitrary(d);
                         keyToPalette[key] = canonical;
                     }
                     skToPalette[d] = canonical;

@@ -9,6 +9,24 @@ fixed before release rather than after.
 
 Build to test with: `main` after the 0.8.3 sync merge, or the `sync/upstream-0.8.3` branch.
 
+## Which board?
+
+**Any of them — §1–§4 are chip-agnostic.** What changed this release is the *drawing* (which
+colours, which order, which route), and that is identical whichever microcontroller replays it.
+So testing on an **ESP32-S3** validates §1–§4 just as well as a Pico would.
+
+Two chip-specific notes:
+
+- **ESP32-S3:** the firmware and `EspFlasher` were **not touched** this release. The `.tdld` binary
+  format is also unchanged — upstream did not alter it, and neither did we, which the firmware's
+  host parser tests confirm. So an existing flashed board needs no re-flash of the base firmware;
+  just export a new drawing.
+- **RP2040 / RP2350:** these got two changes the ESP32 did not. The firmware LED now goes blue for
+  dpad-only input (cosmetic, visible immediately), and the UF2 write path was hardened — it now
+  retries once after a permission denial and, importantly, no longer fails *silently* when the
+  drive vanishes between detection and writing. If you only test on ESP32, note in the release
+  notes that the UF2 retry path is unverified.
+
 ---
 
 ## 1. Erase-all before bucket fill — ⚠ highest risk

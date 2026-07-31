@@ -46,6 +46,24 @@ namespace TomodachiDrawer.Bench
         /// </summary>
         public long PaintActions { get; private set; }
 
+        /// <summary>
+        /// <b>The hold-run metric</b>, and the discriminator for whether pricing a run break in the
+        /// solver objective actually did anything. One <c>Press(A)</c> starts exactly one A-hold run,
+        /// so this is the <c>groups</c> term in <c>travel + groups</c>: the number of times the route
+        /// left a run of adjacent cells and had to release and re-press.
+        /// <para>
+        /// Unlike route cost this has <b>no wall-clock component</b>, so it is exact. Total taps carry
+        /// ~0,7% run-to-run noise on a 256² image because the OrTools time limit is a wall-clock
+        /// budget, which is more than the whole expected effect — so a tap delta cannot decide the
+        /// question and this can.
+        /// </para>
+        /// <para>
+        /// Lower is better, and unlike <see cref="PaintActions"/> it is <i>not</i> invariant: it is
+        /// supposed to move. Coverage is what must not move.
+        /// </para>
+        /// </summary>
+        public long HoldRuns { get; private set; }
+
         public long StickMoves { get; private set; }
         public double TotalMilliseconds { get; private set; }
 
@@ -55,9 +73,11 @@ namespace TomodachiDrawer.Bench
         {
             if (btn == Button.A)
             {
-                // Start of an A-hold run: paints the cell under the cursor.
+                // Start of an A-hold run: paints the cell under the cursor. Menu confirmations go
+                // through Tap(Button.A, ...) instead, so Press(A) counts runs and nothing else.
                 _aHeld = true;
                 PaintActions++;
+                HoldRuns++;
             }
         }
 

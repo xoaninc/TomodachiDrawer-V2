@@ -73,13 +73,20 @@ namespace TomodachiDrawer.Core
             return searchParameters;
         }
 
+        /// <param name="holdsAAcrossAdjacent">
+        /// True for the fine-detail phase, which holds A across Chebyshev-1 neighbours, so the arc
+        /// cost has to price breaking that run. False for stamps and bucket clicks, which have no
+        /// runs. Must match what the emission side passes, or the parallel path optimises a different
+        /// objective than the serial one. See <see cref="CanvasDrawer.MoveCost"/>.
+        /// </param>
         public static List<CanvasPoint> Solve(
             IReadOnlyList<CanvasPoint> inputPoints,
             float timeLimitSeconds,
             out double solveMs,
             bool earlyExitEnabled = false,
             double earlyExitRateCoefficient = 0.05,
-            int earlyExitSolutionsDistance = 10
+            int earlyExitSolutionsDistance = 10,
+            bool holdsAAcrossAdjacent = false
         )
         {
             if (inputPoints.Count == 0)
@@ -108,7 +115,11 @@ namespace TomodachiDrawer.Core
                 {
                     var fromNode = manager.IndexToNode(fromIndex);
                     var toNode = manager.IndexToNode(toIndex);
-                    return CanvasDrawer.Chebyshev(points[fromNode], points[toNode]);
+                    return CanvasDrawer.MoveCost(
+                        points[fromNode],
+                        points[toNode],
+                        holdsAAcrossAdjacent
+                    );
                 }
             );
 
@@ -175,6 +186,9 @@ namespace TomodachiDrawer.Core
                 {
                     if (visited[j])
                         continue;
+                    // Plain Chebyshev on purpose — see the matching note in
+                    // CanvasDrawer.NearestNeighbourRoute. A single argmin cannot be changed by a
+                    // penalty that is strictly increasing in the distance it penalises.
                     int dist = CanvasDrawer.Chebyshev(inputPoints[j], cur);
                     if (dist < nearestDist)
                     {

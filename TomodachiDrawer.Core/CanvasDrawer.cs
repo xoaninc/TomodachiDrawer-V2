@@ -970,7 +970,15 @@ namespace TomodachiDrawer.Core
                 {
                     try
                     {
-                        var route = RouteSolver.Solve(pts[i], times[i], out _);
+                        // Only the fine-detail phase holds A across adjacent cells, so only it prices
+                        // breaking that run. This must match what the serial path passes to
+                        // PerformTSP or the two paths optimise different objectives.
+                        var route = RouteSolver.Solve(
+                            pts[i],
+                            times[i],
+                            out _,
+                            holdsAAcrossAdjacent: keys[i].Item2 == RoutingPhaseKind.FineDetail
+                        );
                         // Cursor-free nearest-neighbour rather than raw input order: the emission
                         // path uses NearestNeighbourRoute for the same case, but that one starts
                         // from the live cursor, which is still on the previous layer here.

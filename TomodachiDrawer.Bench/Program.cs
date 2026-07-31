@@ -37,6 +37,7 @@ namespace TomodachiDrawer.Bench
             string Arm,
             long DPadTaps,
             long PaintActions,
+            long HoldRuns,
             long StickMoves,
             double DrawSeconds,
             double GenerateSeconds,
@@ -99,6 +100,7 @@ namespace TomodachiDrawer.Bench
                     results.Add(best!);
                     Console.WriteLine(
                         $"  {name, -10} {arm.Name, -16} dpad={best!.DPadTaps, 8}  paint={best.PaintActions, 7}  "
+                            + $"runs={best.HoldRuns, 6}  "
                             + $"draw={best.DrawSeconds, 9:F1}s  gen={best.GenerateSeconds, 6:F2}s"
                             + $"\n{new string(' ', 30)}render: {best.Comparison}"
                     );
@@ -192,6 +194,7 @@ namespace TomodachiDrawer.Bench
                 arm.Name,
                 metrics.DPadTaps,
                 metrics.PaintActions,
+                metrics.HoldRuns,
                 metrics.StickMoves,
                 timing.TotalSeconds,
                 sw.Elapsed.TotalSeconds,

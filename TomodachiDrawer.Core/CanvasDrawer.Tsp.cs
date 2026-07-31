@@ -52,6 +52,30 @@ namespace TomodachiDrawer.Core
         internal static int Chebyshev(CanvasPoint a, CanvasPoint b) =>
             Math.Max(Math.Abs(a.X - b.X), Math.Abs(a.Y - b.Y));
 
+        /// <summary>
+        /// What moving a→b actually <b>costs to emit</b>, in taps — which is not the same as the
+        /// distance travelled.
+        /// <para>
+        /// <c>FineDetailTsp</c> holds A down across Chebyshev-1 neighbours, so a <c>d == 1</c> arc is
+        /// one DPad tap and nothing else. A <c>d &gt; 1</c> arc additionally <i>breaks</i> the hold
+        /// run: one release and one press, priced at exactly <b>+1</b>. That is the same derivation
+        /// as <see cref="ChooseCut"/>'s hold-run correction, and it is why total emission is
+        /// <c>travel + groups</c> where <c>groups = n - L1</c> — so for a fixed point count,
+        /// minimising cost means <i>rewarding adjacency</i>, which plain Chebyshev does not do at all.
+        /// </para>
+        /// <para>
+        /// Only the phases that hold A pay this. Stamps and bucket clicks emit one plain
+        /// <c>Tap(A)</c> per point with no runs to break, so passing <c>false</c> gives back plain
+        /// Chebyshev — applying the penalty there would repeat the mistake the first version of
+        /// <see cref="ChooseCut"/> made.
+        /// </para>
+        /// </summary>
+        internal static int MoveCost(CanvasPoint a, CanvasPoint b, bool holdsAAcrossAdjacent)
+        {
+            int d = Chebyshev(a, b);
+            return holdsAAcrossAdjacent && d > 1 ? d + 1 : d;
+        }
+
         /// <summary>Index of the point nearest the current cursor, used as the route start.
         /// Reads live cursor state, so this is emission-time only — never call it from the
         /// parallel pre-solve.</summary>
@@ -81,11 +105,33 @@ namespace TomodachiDrawer.Core
         /// cycle, it must NOT be fed through <see cref="CutCycleNearCursor"/> — that would add a
         /// closing arc this deliberately refuses to pay for.
         /// </para>
+        /// <para>
+        /// The DP objective and the emission agree exactly, which is what makes
+        /// <paramref name="holdsAAcrossAdjacent"/> safe here: node 0 is pinned to the cursor-nearest
+        /// point and the result is emitted forward from it without reorientation, so the sum the DP
+        /// minimised is literally the sum the emission pays. <c>CutCycleTests</c>' brute-force
+        /// counterpart pins this.
+        /// </para>
         /// </summary>
-        private List<CanvasPoint> HeldKarpRoute(CanvasPoint[] points)
+        private List<CanvasPoint> HeldKarpRoute(CanvasPoint[] points, bool holdsAAcrossAdjacent) =>
+            HeldKarpFrom(points, NearestIndexToCursor(points), holdsAAcrossAdjacent);
+
+        /// <summary>
+        /// The Held-Karp DP itself, with the start handed in rather than read from the cursor.
+        /// <para>
+        /// Split out purely so it can be brute-forced: at these sizes every permutation can be
+        /// enumerated and the DP's answer compared against the exhaustive optimum, which is a much
+        /// stronger check than reading the recurrence. Same reason <see cref="ChooseCut"/> is a pure
+        /// static.
+        /// </para>
+        /// </summary>
+        internal static List<CanvasPoint> HeldKarpFrom(
+            CanvasPoint[] points,
+            int start,
+            bool holdsAAcrossAdjacent
+        )
         {
             int n = points.Length;
-            int start = NearestIndexToCursor(points);
 
             // Relabel so the start is node 0, keeps the DP masks simple.
             var nodes = new CanvasPoint[n];
@@ -121,7 +167,7 @@ namespace TomodachiDrawer.Core
                         if ((mask & (1 << k)) != 0)
                             continue;
                         int next = mask | (1 << k);
-                        int cost = dp[mask, j] + Chebyshev(nodes[j], nodes[k]);
+                        int cost = dp[mask, j] + MoveCost(nodes[j], nodes[k], holdsAAcrossAdjacent);
                         if (cost < dp[next, k])
                         {
                             dp[next, k] = cost;
@@ -194,6 +240,9 @@ namespace TomodachiDrawer.Core
                 {
                     if (visited[j])
                         continue;
+                    // Plain Chebyshev on purpose, not MoveCost. This is a single argmin, and MoveCost
+                    // is strictly increasing in d (1→1, 2→3, 3→4, …), so the hold-run penalty cannot
+                    // change which point is nearest. Using it here would be pure churn.
                     int dist = Chebyshev(points[j], cur);
                     if (dist < nearestDist)
                     {
@@ -241,7 +290,7 @@ namespace TomodachiDrawer.Core
             // Small enough to solve exactly - faster and better than the heuristic, and dodges the
             // improvement limit being flaky on tiny instances.
             if (points.Length <= ExactMaxPoints)
-                return HeldKarpRoute(points);
+                return HeldKarpRoute(points, holdsAAcrossAdjacent);
 
             int closestPointIndex = NearestIndexToCursor(points);
 
@@ -253,10 +302,14 @@ namespace TomodachiDrawer.Core
                 {
                     var fromNode = manager.IndexToNode(fromIndex);
                     var toNode = manager.IndexToNode(toIndex);
-                    // A note: during testing I made a change trying to incentivize adjacent things
-                    // since it can just hold A during... but the lowest value this can return is 1
-                    // so there was no gain, it was already trying to do that lol.
-                    return Chebyshev(points[fromNode], points[toNode]);
+                    // Upstream's note here read: "during testing I made a change trying to
+                    // incentivize adjacent things since it can just hold A during... but the lowest
+                    // value this can return is 1 so there was no gain, it was already trying to do
+                    // that lol." That names the trap and then walks into it — with integer costs an
+                    // adjacent arc cannot be *discounted* below 1, so a discount is inexpressible.
+                    // Penalising the non-adjacent arc instead expresses the same preference, which
+                    // is what MoveCost does.
+                    return MoveCost(points[fromNode], points[toNode], holdsAAcrossAdjacent);
                 }
             );
 

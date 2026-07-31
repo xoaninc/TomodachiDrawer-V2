@@ -1,8 +1,8 @@
 # Hardware validation — 0.5.0
 
 **This is the release gate.** 0.5.0 changes *what gets drawn*, and no amount of CI can see that.
-Everything else in this release is verified offline (47 unit tests, firmware parser tests, and the
-route bench in `Docs/bench/`), but the four items below need a real Switch.
+Everything else in this release is verified offline (52 unit tests, 27 firmware parser checks, and
+the route bench in `Docs/bench/`), but the four items below need a real Switch.
 
 Do not tag 0.5.0 until §1 and §2 pass. If something fails, the fix is cheap — say so and it gets
 fixed before release rather than after.
@@ -17,10 +17,11 @@ So testing on an **ESP32-S3** validates §1–§4 just as well as a Pico would.
 
 Two chip-specific notes:
 
-- **ESP32-S3:** the firmware and `EspFlasher` were **not touched** this release. The `.tdld` binary
-  format is also unchanged — upstream did not alter it, and neither did we, which the firmware's
-  host parser tests confirm. So an existing flashed board needs no re-flash of the base firmware;
-  just export a new drawing.
+- **ESP32-S3:** the firmware, `EspFlasher` and the `.tdld` writer have **no behavioural change**
+  this release. Verified mechanically, not assumed: `TomodachiDrawer.Firmware.ESP32/` has zero
+  commits since 0.4.1, and `EspFlasher.cs` plus `FileControllerSink.cs` are byte-identical to
+  0.4.1 once whitespace is stripped — both were only reformatted by the csharpier pass. So an
+  existing flashed board needs **no re-flash** of the base firmware; just export a new drawing.
 - **RP2040 / RP2350:** these got two changes the ESP32 did not. The firmware LED now goes blue for
   dpad-only input (cosmetic, visible immediately), and the UF2 write path was hardened — it now
   retries once after a permission denial and, importantly, no longer fails *silently* when the
@@ -42,6 +43,16 @@ depends on hard-coded eraser-submenu coordinates that were ported, not measured 
 gets clicked.
 
 **Test:** a **256×256 fully opaque** image, Switch **2**.
+
+**You do not have to sit through the whole draw.** A 256² image is ~2 hours estimated, but erase-all
+and the bucket fill both happen in roughly the **first minute**, right after the countdown. Once the
+canvas is filled and the first layer starts, the verdict on this item is already in — press **Cancel
+Generation** there and you have also just run §4. One short run covers the riskiest item and the
+cheapest one.
+
+**Need a test image?** `dotnet run --project TomodachiDrawer.Bench -c Release -- --tsp 0.2 --colours 32 --render-out /tmp/r`
+writes `/tmp/r/mosaic256-expected.png` — 256×256, fully opaque, already quantized to 32 colours.
+That is exactly the shape this item needs, so there is no hunting for a suitable PNG.
 
 | Watch for | Pass | Fail |
 |---|---|---|

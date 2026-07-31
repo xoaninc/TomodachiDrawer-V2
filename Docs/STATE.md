@@ -4,7 +4,7 @@ Written at the end of a long session so nothing depends on remembering it. Start
 
 ## One-line status
 
-`main` is at **0.5.0, unreleased and untagged**, 28 commits ahead of the last release (0.4.1).
+`main` is at **0.5.0, unreleased and untagged**, 29 commits ahead of the last release (0.4.1).
 CI green on all five platforms × Debug/Release plus both firmwares. 52 tests. 0 warnings.
 **The only thing standing between here and a release is testing on real hardware.**
 

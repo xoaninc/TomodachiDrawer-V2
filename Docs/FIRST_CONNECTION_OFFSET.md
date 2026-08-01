@@ -134,6 +134,36 @@ proceed from a now-certain (0,0). Cost ≈ the corner detour + margin per layer 
 a 2-hour draw — and it bounds any desync's blast radius to a single layer. Not implemented yet:
 it changes what gets drawn, so it belongs after the 0.5.0 gate, or in it if Juan prefers.
 
+## Mitigations shipped (2026-08-01 night), their audited limits
+
+Both landed after Juan confirmed the 0.4.1-era clean record (10/10) was on the **ESP32-S3** —
+board and app version changed together, so "0.5.0 regressed" is unproven; the board is the
+stronger suspect. The story is now internally consistent: the **first-plug offset happened on
+both boards** (the 6-reports settle flaw is shared; ESP32's port is task #20), while the
+**mid-draw desync appeared only on the RP2040** — the board whose firmware never re-asserted
+controller state.
+
+1. **Per-layer corner re-sync** (`c7cd67c`). Audited: the wire order is correct even though the
+   stamp phase records into a `TimingSink` and replays later (re-sync writes directly to the real
+   output *before* the recording starts); the fine-detail dry-run's cursor save/restore is
+   untouched; pre-solved route cuts adapt to the re-synced cursor by construction.
+   **Known limits, on purpose:** (a) the overdrive absorbs at most `CursorResyncOverdrive` (32) px
+   of rightward/downward error per layer — unbounded leftward/upward, since those clamp during
+   navigation; (b) the blast radius is one *layer*, and a big fine-detail layer can run 10–20
+   minutes, so a desync early in one still costs that layer. If that ever hurts in practice, the
+   next step is a mid-layer re-sync every N estimated minutes, not a bigger margin.
+2. **RP firmware re-asserts state before every Delay record** (`4b8b9c9`), mirroring the ESP32.
+   Audited: HID reports carry absolute state, so a duplicate can never double-press; the RLE
+   repeat opcodes only apply to 1-byte records, so the re-send cannot be amplified; and delays
+   over 4095 ms are split into multiple records, which means the **4.25 s colour-slam hold gets
+   periodic re-assertion of the held ZL/ZR+stick state** — an unplanned bonus that protects
+   exactly the kind of long-held input a mis-latch would hurt most.
+
+**If a long draw desyncs again despite both:** the clean discriminator is an A/B — generate the
+same image's `.tdld` with 0.4.1 code (`git checkout ba1fd2f`, build, export) and replay it on the
+RP2040-Zero. Desync ⇒ board/firmware, not 0.5.0's stream. Clean ⇒ the 0.5.0 stream changes come
+back under suspicion.
+
 ## Discriminating questions for the next hardware session
 
 1. **How tall was the gap?** ~2 px → mechanism 2. Several-to-tens of px → mechanism 1.

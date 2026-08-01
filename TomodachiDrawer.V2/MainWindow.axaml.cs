@@ -505,13 +505,8 @@ public partial class MainWindow : Window
     private string[] _esp32Ports = Array.Empty<string>();
     private string[] _esp32HiddenPorts = Array.Empty<string>();
 
-    private static string GetEsp32FirmwareFilePath()
-    {
-        var baseDirectory = AppContext.BaseDirectory;
-        if (OperatingSystem.IsMacOS() && baseDirectory.Contains(".app/Contents/MacOS"))
-            return Path.Combine(baseDirectory, esp32FirmwareFileName);
-        return esp32FirmwareFileName;
-    }
+    // Same resolution as the RP firmware: next to the executable first. See ResolveBundledFile.
+    private static string GetEsp32FirmwareFilePath() => ResolveBundledFile(esp32FirmwareFileName);
 
     // Unlike the RP2040 (which mounts as a drive in BOOT mode), the ESP32-S3
     // exposes a serial port only while in download mode. We list serial ports
@@ -1516,23 +1511,24 @@ public partial class MainWindow : Window
             ? "TomodachiDrawer.Firmware.rp2350.uf2"
             : "TomodachiDrawer.Firmware.rp2040.uf2";
 
-    private static string GetBaseFirmwareFilePath(RPChipType chip)
+    private static string GetBaseFirmwareFilePath(RPChipType chip) =>
+        ResolveBundledFile(GetRPFirmwareFileName(chip));
+
+    /// <summary>
+    /// Finds a file that ships alongside the executable.
+    /// <para>
+    /// Next to the executable <b>first</b>, then the working directory. The old version only used
+    /// <see cref="AppContext.BaseDirectory"/> for a macOS <c>.app</c> bundle and otherwise passed a
+    /// bare filename, which resolves against the <i>working</i> directory — so launching the
+    /// executable from anywhere other than its own folder reported the firmware as missing while it
+    /// sat right next to the binary. The working directory is kept as a fallback because that is
+    /// where it was previously found, and dropping it would break anyone relying on it.
+    /// </para>
+    /// </summary>
+    private static string ResolveBundledFile(string fileName)
     {
-        var firmwareFileName = GetRPFirmwareFileName(chip);
-        // Check if we're running on macOS and the app is running from app bundle, not CLI.
-        var baseDirectory = AppContext.BaseDirectory;
-        if (OperatingSystem.IsMacOS() && baseDirectory.Contains(".app/Contents/MacOS"))
-        {
-            // In macOS, when you launch `.app` from Finder, the current working directory is root directory `/`,
-            // and the firmware file isn't located there. `AppContext.BaseDirectory` resolves to
-            // `/path/to/TomodachiDrawer.app/Contents/MacOS/`, where the firmware file lives.
-            return Path.Combine(baseDirectory, firmwareFileName);
-        }
-        else
-        {
-            // Simply use the file in current working directory
-            return firmwareFileName;
-        }
+        var nextToExecutable = Path.Combine(AppContext.BaseDirectory, fileName);
+        return File.Exists(nextToExecutable) ? nextToExecutable : fileName;
     }
 
     private void FlashFirmwareButton_Click(object? sender, RoutedEventArgs e)
@@ -1546,9 +1542,15 @@ public partial class MainWindow : Window
         {
             _ = ShowMessageAsync(
                 "Error flashing base firmware",
-                $"For some reason could not locate {firmwareFileName}"
-                    + "\nPlease ensure that you extracted the program to a folder, and ran the executable from that extracted folder."
-                    + $"\nIf you still cannot flash with this button, you can manually drag the {firmwareFileName} file to the device's drive on your system to flash it."
+                $"Could not find {firmwareFileName}."
+                    + $"\n\nLooked in:\n{AppContext.BaseDirectory}\n{Directory.GetCurrentDirectory()}"
+                    + "\n\nIf you downloaded a release, extract the whole archive to a folder and run"
+                    + " the executable from inside it — the firmware ships next to it."
+                    + "\n\nIf you built this yourself, the RP firmware is not in the repository: it is"
+                    + " built by CI. Download it from the Actions artifacts and put it next to the"
+                    + " executable."
+                    + $"\n\nEither way you can always flash manually: drag {firmwareFileName} onto the"
+                    + " board's drive while it is in BOOT mode."
             );
             return;
         }

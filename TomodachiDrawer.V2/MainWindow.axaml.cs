@@ -541,16 +541,7 @@ public partial class MainWindow : Window
                     hiddenPorts = Array.Empty<string>();
                 }
 
-                // Say what was hidden, once per change, so a board on an unrecognised bridge does
-                // not just silently fail to appear.
-                if (!_esp32HiddenPorts.SequenceEqual(hiddenPorts))
-                {
-                    _esp32HiddenPorts = hiddenPorts;
-                    if (hiddenPorts.Length > 0)
-                        AppendLog(
-                            $"Ignoring {hiddenPorts.Length} serial port(s) that cannot be a board: {string.Join(", ", hiddenPorts)}"
-                        );
-                }
+                _esp32HiddenPorts = hiddenPorts;
 
                 await Dispatcher.UIThread.InvokeAsync(() =>
                 {
@@ -576,9 +567,26 @@ public partial class MainWindow : Window
                     }
                     else
                     {
+                        // The count of ignored ports goes here rather than in the log. It is normal
+                        // and permanent on macOS (Bluetooth, the debug console, paired audio
+                        // devices), so logging it announced a non-event on every launch — while
+                        // still being worth surfacing, because a board on a bridge we have no rule
+                        // for would otherwise just never appear.
                         ESP32StatusLabel.Text =
-                            "ESP32 not found — hold BOOT, tap RESET, release BOOT";
+                            "ESP32 not found — hold BOOT, tap RESET, release BOOT"
+                            + (
+                                hiddenPorts.Length > 0
+                                    ? $" ({hiddenPorts.Length} system port(s) ignored)"
+                                    : ""
+                            );
                         ESP32StatusLabel.Foreground = Brushes.Red;
+                        ToolTip.SetTip(
+                            ESP32StatusLabel,
+                            hiddenPorts.Length > 0
+                                ? "Ignored, because these cannot be a board:\n"
+                                    + string.Join("\n", hiddenPorts)
+                                : null
+                        );
                     }
 
                     FlashEsp32FirmwareButton.IsEnabled = portSelected && !BusyExporting;

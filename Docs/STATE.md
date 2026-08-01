@@ -4,9 +4,13 @@ Written at the end of a long session so nothing depends on remembering it. Start
 
 ## One-line status
 
-`main` is at **0.5.0, unreleased and untagged**, 29 commits ahead of the last release (0.4.1).
-CI green on all five platforms × Debug/Release plus both firmwares. 52 tests. 0 warnings.
+`main` is at **0.5.0, unreleased and untagged**, ahead of the last release (0.4.1) by everything
+below. CI green on all five platforms × Debug/Release plus both firmwares. 62 tests. 0 warnings.
 **The only thing standing between here and a release is testing on real hardware.**
+
+Updated 2026-08-01: the solver now prices A-hold runs, cutting hold-run breaks 2–7% on every bench
+image. Layer ordering was also implemented, measured, and **reverted** — it made drawings longer.
+Both written up in [`POST_0.5.0_IDEAS.md`](./POST_0.5.0_IDEAS.md).
 
 ## What to do next
 
@@ -64,9 +68,14 @@ phase faster than the percentage does.
 Full ported/skipped breakdown with reasons: [`../SYNC.md`](../SYNC.md).
 Full audit: [`UPSTREAM_SYNC_AUDIT.md`](./UPSTREAM_SYNC_AUDIT.md).
 
-Highlights: colour merge for identical in-game HSV steps (fewer redundant layers), erase-all
-before bucket fill on full-size Switch 2 images, Switch 1 brush-menu lag mitigation, five crash
-fixes, RP firmware LED tweaks, ImageSharp → ColorQuant, SkiaSharp 4, Avalonia 12.1, CI hygiene.
+Highlights: colour merge for identical in-game HSV steps, erase-all before bucket fill on full-size
+Switch 2 images, Switch 1 brush-menu lag mitigation, five crash fixes, RP firmware LED tweaks,
+ImageSharp → ColorQuant, SkiaSharp 4, Avalonia 12.1, CI hygiene.
+
+One correction, measured 2026-08-01: the colour merge is often described as "fewer redundant layers,
+so shorter drawings". On all three bench images it collapses **nothing** — identical layer and tap
+counts with it on and off (`--no-colour-merge`). Those images come from distinct HSV values, so there
+is nothing to merge. It pays on real photos with near-duplicate RGB, by an **unmeasured** amount.
 
 Deliberately skipped: Sentry, upstream telemetry, their UI state-context refactor, their ESP32-S3
 stack (V2 has its own), and the csproj half of `5dd17d1` — that one would restore

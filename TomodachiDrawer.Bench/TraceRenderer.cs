@@ -42,10 +42,15 @@ namespace TomodachiDrawer.Bench
         private readonly HashSet<uint> _coloursUsed = [];
 
         /// <summary>
-        /// How many distinct colours the drawing actually selected — i.e. the layer count, read off
-        /// the trace rather than plumbed out of the drawer. This is what makes upstream's colour merge
-        /// measurable: the merge collapses colours reaching the same in-game HSV steps, so its whole
-        /// effect is visible here as a smaller number.
+        /// Distinct colours the drawing selected, read off the trace rather than plumbed out of the
+        /// drawer. This is what makes upstream's colour merge measurable: the merge collapses colours
+        /// reaching the same in-game HSV steps, so its whole effect shows up here as a smaller number.
+        /// <para>
+        /// <b>Not</b> the layer count, and the difference matters when quoting it: on a full-size
+        /// opaque image the bucket-fill colour is selected too but is not a layer, so this reads one
+        /// higher than the drawer's own "Ordered N colour layers" log line. What it counts is
+        /// <i>colour-picker trips</i>, which is the cost-relevant quantity anyway.
+        /// </para>
         /// </summary>
         public int DistinctColours => _coloursUsed.Count;
 

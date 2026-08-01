@@ -38,7 +38,7 @@ namespace TomodachiDrawer.Bench
             long DPadTaps,
             long PaintActions,
             long HoldRuns,
-            int Layers,
+            int ColoursSelected,
             long StickMoves,
             double DrawSeconds,
             double GenerateSeconds,
@@ -118,7 +118,7 @@ namespace TomodachiDrawer.Bench
                     results.Add(best!);
                     Console.WriteLine(
                         $"  {name, -10} {arm.Name, -16} dpad={best!.DPadTaps, 8}  paint={best.PaintActions, 7}  "
-                            + $"runs={best.HoldRuns, 6}  layers={best.Layers, 3}  "
+                            + $"runs={best.HoldRuns, 6}  cols={best.ColoursSelected, 3}  "
                             + $"draw={best.DrawSeconds, 9:F1}s  gen={best.GenerateSeconds, 6:F2}s"
                             + $"\n{new string(' ', 30)}render: {best.Comparison}"
                     );

@@ -1,84 +1,104 @@
-# Ideas after 0.5.0 — four findings, with decisions
+# Ideas after 0.5.0 — findings, and what measuring them showed
 
-Found by reading the code on 2026-07-31, after the 0.8.3 sync shipped to `main`. All four are
-**post-release**: `main` at `90eec34` is what the 0.5.0 hardware gate validates, so nothing here
-gets touched until 0.5.0 is tagged.
+Found by reading the code on 2026-07-31, after the 0.8.3 sync shipped to `main`, then measured on
+2026-08-01. Two of them were implemented; one survived measurement and one did not.
 
 Two of the four are TODOs upstream wrote themselves and never did. All four are now *measurable*,
 which is the difference from before: `TomodachiDrawer.Bench` prices any routing change in DPad taps,
 and the intent-trace renderer proves a change did not drop or misplace a single cell.
 
-| # | Finding | Decision |
+| # | Finding | Outcome |
 |---|---|---|
-| 1 | The TSP objective minimises travel, not taps | **Do first.** Keep only if the bench measures it |
-| 2 | Layer order is unoptimised (upstream's own TODO) | **Do second.** Feasible and safe |
-| 3 | The colour grid navigates Manhattan, not Chebyshev | **Pending** one observation on hardware |
+| 1 | The TSP objective minimises travel, not taps | ✅ **Done and kept** (`995608e`) — hold-run breaks −2,2% to −7,4% on 9/9 arms |
+| 2 | Layer order is unoptimised (upstream's own TODO) | ❌ **Tried, measured, reverted.** It made drawings *longer*. See below |
+| 3 | The colour grid navigates Manhattan, not Chebyshev | **Pending** one observation on hardware; currently looks unfixable |
 | 4 | The 4250 ms colour-homing delay | **Risky half rejected.** Cheap half is lowest priority |
+
+Also measured on 2026-08-01, and worth recording because it corrects a claim: **upstream's colour
+merge collapses nothing on any of the three bench images.** With `--no-colour-merge` the layer counts
+and tap counts are identical. Those images are built from distinct HSV values, so there is nothing to
+collapse — the merge pays on real photos with near-duplicate RGB, and by how much is **unmeasured**.
+Any statement that 0.5.0 is shorter "thanks to the colour merge" is unsupported.
 
 ---
 
-## 1. The TSP objective minimises travel, but what you pay is taps
+## 1. The TSP objective minimised travel, but what you pay is taps — DONE, KEPT
 
-**Do this first.** Smallest change, mechanically checkable, and it improves upstream's serial path
-too — so if it measures, it joins the `pr/optimal-tsp-cut` PR rather than needing its own pitch.
+Landed as `995608e`. `MoveCost` charges `d + (d > 1 ? 1 : 0)` for the fine-detail phase, because
+`FineDetailTsp` holds A across Chebyshev-1 neighbours: a `d == 1` arc is one DPad tap, and a `d > 1`
+arc additionally breaks the hold run for one release plus one press. Total emission is
+`travel + groups` where `groups = n - L1`, so for a fixed point count the objective should reward
+adjacency — and plain Chebyshev did not do that at all.
 
-The arc cost handed to OrTools is plain Chebyshev at all three sites:
-`RouteSolver.cs:111`, `CanvasDrawer.Tsp.cs:259`, and Held-Karp's inner loop at `CanvasDrawer.Tsp.cs:124`.
+**Upstream had tried it and recorded a null result**, in the comment this replaced: *"the lowest
+value this can return is 1 so there was no gain"*. That names the trap and then walks into it: with
+integer costs an adjacent arc cannot be *discounted* below 1, so the preference is inexpressible as
+a discount. As a penalty on the other side it is expressible.
 
-But the cut work already derived the real emission cost. `FineDetailTsp` **holds A** across
-Chebyshev-1 neighbours, so:
+### Measured (A/B, same machine, `--tsp 1.0 --colours 32 --repeats 2`)
 
-- an arc with `d == 1` costs **1 tap** (the hold run continues)
-- an arc with `d > 1` costs **`d + 1`** (the run breaks: one release, one press)
+Hold-run breaks — the deterministic metric, no wall-clock component:
 
-So the correct callback is `d + (d > 1 ? 1 : 0)`. This is the same insight as the optimal cut,
-applied to the *objective* instead of the *cut point*: the solver currently has no reason to prefer
-keeping hold runs contiguous, because it cannot see that breaking one costs anything.
+| Image | arm | before | after | Δ |
+|---|---|---|---|---|
+| grid64 | serial | 112 | 107 | −4,5% |
+| grid64 | parallel | 108 | 100 | −7,4% |
+| grid64 | parallel-1thread | 108 | 100 | −7,4% |
+| rings128 | serial | 1008 | 954 | −5,4% |
+| rings128 | parallel | 992 | 961 | −3,1% |
+| rings128 | parallel-1thread | 991 | 955 | −3,6% |
+| mosaic256 | serial | 3797 | 3594 | −5,3% |
+| mosaic256 | parallel | 3742 | 3658 | −2,2% |
+| mosaic256 | parallel-1thread | 3786 | 3672 | −3,0% |
 
-**Two constraints, or this reintroduces the bug the cut already had once:**
+Down on **9 of 9**. `paint` exactly constant, `render: 100,00%` with `missing=0 wrongColour=0
+extra=0` on 9 of 9.
 
-- **Fine-detail phase only.** Stamps and bucket clicks emit one plain `Tap(A)` per point and have
-  no hold runs, so the `+1` is meaningless there. Applying it globally is exactly the error the
-  lexicographic cut rule made.
-- **`HeldKarpRoute` returns an open path**, not a cycle. Changing its objective is fine, but check
-  it does not interact with the open-path branch in `OrientPreSolved`.
+**Total DPad taps moved only within noise** (−2,9% to +0,4%), which was predicted in advance: the
+`--tsp` budget is wall-clock so OrTools is nondeterministic under load, and the noise band (~0,7% on
+mosaic256, ~800 taps) is wider than the whole effect. That is precisely why the gate was set on hold
+runs rather than on taps.
 
-**This may not measure, and that is an acceptable outcome.** The bias is systematic but small.
-Gate: run `--tsp 1.0 --colours 32 --repeats 2`, require `paint` constant and `render: 100,00%` on
-all nine arms, and require the tap counts to move by more than run-to-run noise (which is ~0.01–0.7%,
-since `--tsp` is a wall-clock budget and OrTools is nondeterministic under load). If it does not
-move, drop it — do not ship a correct-but-immeasurable change on the strength of the derivation.
+**Worth offering upstream** alongside the optimal cut — it improves their serial path too.
 
-## 2. Layer order is unoptimised, and it is upstream's own TODO
+## 2. Layer ordering — TRIED, MEASURED, REVERTED
 
-**Feasible, and the renderer is what makes it safe to try.** `CanvasDrawer.cs:99-100`, verbatim:
+Implemented (greedy + 2-opt over layer centroids and colour-picker deltas), tested, benched, and then
+**reverted**. Recording it properly so it does not get retried the same way.
 
-> *"Color Pass Order Optimizations for both stamp pass and fine detail pass to minimize travel
-> distance. Need to look at the ai-slop version to try and figure out how that works there."*
+### Why it was reverted
 
-Today layers come out of `ColourPalette.BuildFineLayers` in whatever order the distinct-colour walk
-produces, and the only control is `layers.Reverse()` behind `ReverseColourOrder`
-(`CanvasDrawer.cs:121`). With 32 layers that is **2 of 32! orderings**.
+The bench runs the **Arbitrary** palette, where every colour selection homes the HSV sliders to a
+corner, so picker cost is order-independent and only centroid travel varies. Measured there: no
+change. That alone was only a coverage gap — so it was re-measured on `--quantizer CieLab`, the grid
+palette, which is where the picker term is actually live:
 
-Ordering ≤32 layers is a tiny TSP — OrTools solves it in milliseconds, negligible beside the
-per-layer routing.
+| Image | arm | §1 only | §1 + ordering | Δ |
+|---|---|---|---|---|
+| rings128 | serial | 989,0s | 999,5s | **+1,06%** |
+| rings128 | parallel | 991,1s | 1002,2s | **+1,12%** |
+| rings128 | parallel-1thread | 986,5s | 997,7s | **+1,14%** |
+| mosaic256 | serial | 6746,2s | 6754,5s | +0,12% |
+| grid64 | serial | 175,2s | 174,7s | −0,29% |
 
-**Why reordering is safe:** each pixel belongs to exactly one colour, and a stamp is only placed
-where its whole footprint is already that one colour, so layers do not overwrite each other and the
-final image is order-independent. Two things to respect:
+Consistent across all three arms on rings128, so **not noise: it made drawings longer.**
 
-- The **bucket fill must stay first** — it paints the whole canvas, which is where mosaic256's
-  `overdraw=61634` comes from.
-- The renderer is the check, not the argument: if reordering did disturb the image, `wrongColour`
-  and `extra` would stop being 0.
+### The reason, which is the useful part
 
-**Where it pays, and where it does not** — state this or the estimate looks inflated:
+The ordering was *provably* never worse **under its own cost model** — there is a test for that. It
+was worse in reality, so **the cost model was wrong**, and specifically: it used each layer's
+**centroid** as a proxy for where that layer's work begins. The real inter-layer travel runs from
+where the previous layer's route *ended* to where the next one's *starts*, and both are chosen by
+`ChooseCut` from the live cursor at emission time. Reordering changes the cursor each layer is
+entered from, which changes `ChooseCut`, which changes every per-layer route — an effect a centroid
+model cannot see and can easily lose more to than the ordering gains.
 
-- **Grid palette:** pays twice. The picker navigates from `_lastGridX/_lastGridY`
-  (`ColourPalette.cs:334-335`), so order genuinely determines inter-colour travel. Plus travel to
-  the next layer's first point.
-- **Arbitrary palette:** pays once. The homing in §4 makes picker cost order-independent, so the
-  only gain is travel to the next layer's first point.
+**So layer ordering cannot be evaluated independently of per-layer entry points.** Any future attempt
+needs the two solved together, or at least an ordering cost that uses real route endpoints rather
+than centroids. That is a substantially bigger piece of work than it looked, and the *guarantee*
+being satisfied while the *outcome* got worse is the lesson worth keeping.
+
+Upstream's TODO at `CanvasDrawer.cs:99-100` therefore stays open, and now with a reason.
 
 ## 3. The colour grid navigates Manhattan, not Chebyshev — pending
 
@@ -144,11 +164,50 @@ colour*, which ruins the whole drawing. So it needs real margin, and it ranks be
   it — give a target time, let the app search colour count and denoiser to meet it — is a search over
   the existing pipeline, and it only became practical because generation is now 5–8× faster.
 
+## What the other projects in this space do
+
+Looked at 2026-08-01, prompted by Juan finding them.
+
+### RiiDraw (`riidraw.com`) — the real comparable
+
+Same target as us: Tomodachi Life on an unmodded Switch, no system modification. **Closed source**,
+no repository. Requires **two** RP2040/RP2350 boards (one presenting to the PC, one emulating the Pro
+Controller) wired together or joined by their own adapter board.
+
+Where we are ahead: **one** microcontroller, ESP32-S3 support, and GPL-3.0 source.
+
+Where they are ahead, and each of these is a real gap:
+
+| Their feature | Why it matters here |
+|---|---|
+| **Draw at half size, let the game's smoothing scale it up** | Potentially the largest single win available to us, and it is not a routing change at all. A 128² draw is ~1215s against ~7112s for 256² — call it **6×**. If in-game upscaling is visually acceptable, no amount of TSP work competes with that |
+| Automatic cursor calibration | We hard-code menu coordinates and hope. This is exactly the class of thing item §1 of the hardware checklist exists to catch |
+| Dithering controls | Ours died as dead code in the ImageSharp → ColorQuant move. With only 32 in-game colours, dithering would visibly help gradients — at the cost of more points, so it is a user-facing trade |
+| Virtual on-screen gamepad | Manual nudging during setup, without unplugging the board |
+| Matte options for items and clothing | We only do canvas drawings |
+
+**The half-size trick is worth investigating before any further routing work.** It needs one
+experiment on hardware: draw something at 128², scale it in-game, and judge whether the result is
+acceptable. If it is, the right feature is "draw at half size" as a checkbox, not another 3% of route.
+
+### tmdc (`tmdc.iwannasun.cn`) — different thing entirely
+
+Chinese-language web tool for **3DS** Tomodachi Life, plus a moderated community **gallery** of
+downloadable designs (food, pets, clothing, wallpapers). Currently in maintenance with generation and
+sharing disabled "due to abuse". Not a competitor — different console, and the interesting part is the
+gallery model rather than the input path.
+
+The takeaway is the gallery, not the tool: a way to share a *drawing definition* (our `.tdld` is
+already a portable, board-agnostic file) would cost little and is the kind of thing that makes a tool
+spread. Filed as an idea, not a plan.
+
 ## Order
 
-1. §1 — smallest, provable, and joins the upstream PR if it measures
-2. §2 — feasible, safe, upstream's own TODO
-3. §4's cheap half — needs a hardware calibration, modest payoff
-4. §3 — only if the diagonal observation comes back positive
+1. **Try the half-size trick first.** One hardware experiment, and if it works it dwarfs everything
+   below it.
+2. §4's cheap half — needs a hardware calibration of the slider slew rate, modest payoff.
+3. §3 — only if the diagonal observation comes back positive.
+4. Layer ordering (§2), but only with a cost model built on real route endpoints rather than
+   centroids. Not worth attempting before that.
 
-Everything after 0.5.0 is tagged.
+Everything here is post-0.5.0.

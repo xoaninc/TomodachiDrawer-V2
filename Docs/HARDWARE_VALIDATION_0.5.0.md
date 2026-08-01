@@ -1,8 +1,8 @@
 # Hardware validation — 0.5.0
 
 **This is the release gate.** 0.5.0 changes *what gets drawn*, and no amount of CI can see that.
-Everything else in this release is verified offline (52 unit tests, 27 firmware parser checks, and
-the route bench in `Docs/bench/`), but the five items below need a real Switch.
+Everything else in this release is verified offline (62 unit tests, 27 firmware parser checks, and
+the route bench in `Docs/bench/`), but the four items below need a real Switch.
 
 Do not tag 0.5.0 until §1 and §2 pass. If something fails, the fix is cheap — say so and it gets
 fixed before release rather than after.
@@ -11,9 +11,9 @@ Build to test with: `main` after the 0.8.3 sync merge, or the `sync/upstream-0.8
 
 ## Which board?
 
-**Any of them — §1–§5 are chip-agnostic.** What changed this release is the *drawing* (which
+**Any of them — §1–§4 are chip-agnostic.** What changed this release is the *drawing* (which
 colours, which order, which route), and that is identical whichever microcontroller replays it.
-So testing on an **ESP32-S3** validates §1–§5 just as well as a Pico would.
+So testing on an **ESP32-S3** validates §1–§4 just as well as a Pico would.
 
 Two chip-specific notes:
 
@@ -71,10 +71,14 @@ producing duplicate layers, which shortens drawings.
 
 **Test:** any image with the **Arbitrary** colour matcher and a decent colour limit (say 32+).
 
-- **In the log:** the layer count should be **lower** than the colour limit you asked for. That is
-  expected and is the whole point — the log lines naming each colour are the count.
 - **On screen:** no colour should visibly go missing. Blacks and near-blacks collapsing into one
-  black is correct; two clearly different colours becoming one is not.
+  black is correct; two clearly different colours becoming one is not. **This is the whole test** —
+  the merge is a saving when it fires, so the only thing that can go wrong is it firing too eagerly.
+- **In the log:** the layer count *may* be lower than the colour limit you asked for. Do not treat
+  equal counts as a failure. Measured 2026-08-01 with `--no-colour-merge`: on all three bench images
+  the merge collapses **nothing** — identical layer counts and identical tap counts with it on and
+  off. Those images are generated from distinct HSV values, so there is nothing to collapse. A real
+  photo with near-duplicate RGB is where it pays, and how much is **unmeasured**.
 
 ## 3. Switch 1 brush-menu lag mitigation
 
@@ -91,9 +95,11 @@ original lag on their Switch 1 either.
 
 ## 4. Routing and cancel — low risk, quick to confirm
 
-**Routing:** the bench says routes are now 2–5% shorter than solving serially, and the
-`PaintActions` invariant already proves offline that no points are dropped. A single real draw of
-any image confirms it end to end. Nothing specific to watch beyond "the image comes out right".
+**Routing:** the bench says routes are 2,7–4,8% shorter than before the optimal-cut change, and the
+solver now prices A-hold runs, which cut hold-run breaks a further 2–7% on every image. The
+`PaintActions` invariant plus a 100,00% renderer match already prove offline that no points are
+dropped. A single real draw of any image confirms it end to end — nothing specific to watch beyond
+"the image comes out right".
 
 **Cancel:** press **Cancel Generation** part-way through a generation, then:
 
@@ -103,35 +109,7 @@ any image confirms it end to end. Nothing specific to watch beyond "the image co
    the per-draw `CancellationTokenSource` exists to protect: cancelling through the window-lifetime
    one would have killed serial-port polling for the rest of the session.
 
-## 5. Colour layer order — the one thing offline testing cannot cover
-
-**What changed:** the order the colour layers are drawn in is now chosen to reduce inter-layer cost
-(colour-picker navigation plus travel to the next layer) instead of being whatever order the palette
-happened to produce. This finishes a TODO upstream left in `CanvasDrawer.DrawImage`.
-
-**Why it needs eyes even though the renderer passes.** The renderer proves the *finished image* is
-identical — layers do not overwrite each other, so order cannot change the result, and that is
-asserted. What it does **not** watch is the colour picker itself. On the grid palette the picker
-navigates from wherever it was left (`_lastGridX/_lastGridY`), so reordering makes it take
-combinations of moves it never took before. If there is an off-by-one in that navigation, this is
-what would expose it.
-
-**Test:** any image, any palette. Watch the **log**, then the canvas.
-
-| Watch for | Pass | Fail |
-|---|---|---|
-| Log line `Ordered N colour layers: inter-layer cost X -> Y taps` | `Y <= X`, and `N` equals the layer count drawn | `Y > X` (should be impossible — there is a test for it) |
-| Colour sequence | Colours come out in a different order than you are used to, and each appears **exactly once** | A colour is skipped, or the same colour is selected twice |
-| The finished drawing | Correct | A whole layer painted in the wrong colour — that would mean routes and colours got out of step |
-
-**If a colour comes out wrong:** capture the log. That failure mode means pre-solved routes and
-layers went out of step, which is the specific hazard the ordering is placed *before* the pre-solve
-to avoid.
-
-**Reverse Colour Order still works** and now reverses the optimised order rather than the raw one.
-Toggling it must still change the drawing (see §6).
-
-## 6. Also worth a quick look (changed, but low risk)
+## 5. Also worth a quick look (changed, but low risk)
 
 - **Settings moved to AppData.** First launch of 0.5.0 should carry your old preferences over from
   the working-directory `settings.json` and then keep using

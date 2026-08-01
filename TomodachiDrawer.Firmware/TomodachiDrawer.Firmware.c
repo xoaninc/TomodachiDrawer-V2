@@ -398,6 +398,13 @@ int main(void) {
             case OPCODE_DELAY: { // 2 byte record. 4 bits from record, 8 from second byte
                 uint8_t data     = *ptr++;
                 uint16_t delayMs = (nibble << 8) | data;
+                // Re-assert the current state before waiting, mirroring the ESP32 firmware, which
+                // sends its report before every delay and has the clean long-draw record (10/10)
+                // where this firmware desynced mid-draw. If the console mis-latched the last state
+                // change, this is the moment it gets corrected. One report per Delay record cannot
+                // queue-pressure the endpoint the way upstream's reverted constant-send (b7f61c5)
+                // did — Delay records are menu waits, not per-pixel traffic.
+                send_report_raw();
                 delay_ms_usb(delayMs);
                 break;
             }

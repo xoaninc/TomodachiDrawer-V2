@@ -36,6 +36,9 @@ jobs:
     name: Compile ${{ matrix.platform }} Firmware
     runs-on: ubuntu-latest
     strategy:
+      # Without this, one board's stale-binary failure cancels the other board's build, so you
+      # cannot see whether it compiled and its artifact never appears either.
+      fail-fast: false
       matrix:
         include:
           - platform: rp2040
@@ -69,6 +72,15 @@ jobs:
       run: |
         cmake -G Ninja -B build-${{ matrix.platform }} -DPICO_BOARD=${{ matrix.board }} -DPICO_PLATFORM=${{ matrix.platform }}
         cmake --build build-${{ matrix.platform }} --parallel
+    # Uploaded BEFORE the staleness check on purpose. The check's own error message tells you to
+    # download this artifact and commit it, so it has to exist even - especially - when the check
+    # fails. First version had the two steps the other way round and the artifact came out `skipped`,
+    # which made the instructions impossible to follow.
+    - name: Upload firmware artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: TomodachiDrawer-Firmware-${{ matrix.platform }}
+        path: TomodachiDrawer.Firmware/build-${{ matrix.platform }}/TomodachiDrawer.Firmware.${{ matrix.platform }}.uf2
     # The .uf2 is committed under TomodachiDrawer.V2/ so a fresh clone can flash a board without
     # first hunting down CI artifacts. Committed binaries go stale silently, so this makes that a
     # red build instead: the committed file must equal a fresh build of the source next to it.
@@ -91,11 +103,6 @@ jobs:
           exit 1
         fi
         echo "Committed ${{ matrix.platform }} firmware matches this build."
-    - name: Upload firmware artifact
-      uses: actions/upload-artifact@v7
-      with:
-        name: TomodachiDrawer-Firmware-${{ matrix.platform }}
-        path: TomodachiDrawer.Firmware/build-${{ matrix.platform }}/TomodachiDrawer.Firmware.${{ matrix.platform }}.uf2
   publish-avalonia:
     runs-on: ubuntu-latest
     needs: [build, build-rp-firmware]

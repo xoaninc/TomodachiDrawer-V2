@@ -247,11 +247,21 @@ namespace TomodachiDrawer.Core
 
             var totalLayers = layers.Count;
             // 80% divided by total layers.
+            // The per-layer re-sync only works when the image origin IS the canvas corner. For a
+            // smaller image the user parks the cursor wherever they want the drawing to start, and
+            // that offset exists only in their head — overdriving to the canvas corner would erase
+            // their placement with no way to navigate back.
+            bool canResyncAgainstCanvasCorner = image.Width == 256 && image.Height == 256;
+
             int layerNumber = 0;
             foreach (var l in layers)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 layerNumber++;
+
+                // Bound any accumulated cursor desync to one layer — see ResyncCursorToOrigin.
+                if (canResyncAgainstCanvasCorner)
+                    ResyncCursorToOrigin();
 
                 _palette.SelectColour(l.Colour, 25.0);
 
@@ -1158,6 +1168,42 @@ namespace TomodachiDrawer.Core
                     result.Add(route[((cutIndex - i) % n + n) % n]);
             }
             return result;
+        }
+
+        /// <summary>
+        /// How far past the origin the per-layer re-sync overdrives, per axis, in taps. Bounds the
+        /// amount of accumulated cursor error one re-sync can absorb.
+        /// </summary>
+        internal const int CursorResyncOverdrive = 32;
+
+        /// <summary>
+        /// Re-establishes a <b>known</b> cursor position: navigate to the canvas origin, then keep
+        /// tapping UP and LEFT past it. The canvas edge clamps the extra taps, so whatever error
+        /// had accumulated between the believed and the real cursor — a dpad release the console
+        /// processed late, a swallowed input — is absorbed by the clamp.
+        /// <para>
+        /// This exists because the cursor position can never be read back from the console, so a
+        /// desync cannot be <i>detected</i> — only absorbed. Field observation (2026-08-01, see
+        /// <c>Docs/FIRST_CONNECTION_OFFSET.md</c>): a 2-hour draw ran correctly and then painted
+        /// everything shifted right from one moment on. Called between colour layers, this bounds
+        /// that blast radius to a single layer. Same idea as Switch-Fightstick's
+        /// <c>SYNC_POSITION</c> and img2splat's cautious mode.
+        /// </para>
+        /// <para>
+        /// Axis-separated taps on purpose: a straight UP at the top edge provably clamps, while
+        /// diagonal-at-edge behaviour (slide vs stop) has never been verified on hardware.
+        /// </para>
+        /// </summary>
+        private void ResyncCursorToOrigin()
+        {
+            NavigateTo(_realOutput, 0, 0);
+
+            // Believed position is (0,0) now; these clamp the physical cursor onto it, and must
+            // not touch the believed coordinates.
+            for (int i = 0; i < CursorResyncOverdrive; i++)
+                _realOutput.Tap(DPad.UP);
+            for (int i = 0; i < CursorResyncOverdrive; i++)
+                _realOutput.Tap(DPad.LEFT);
         }
 
         private void NavigateTo(ISwitchOutput output, CanvasPoint p) =>

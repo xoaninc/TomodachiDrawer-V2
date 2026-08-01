@@ -10,6 +10,7 @@ using EspDotNet.Loaders;
 using EspDotNet.Loaders.SoftLoader;
 using EspDotNet.Tools;
 using EspDotNet.Tools.Firmware;
+using TomodachiDrawer.Core;
 
 namespace TomodachiDrawer.UI.Avalonia;
 
@@ -262,7 +263,9 @@ internal static class EspFlasher
     /// </summary>
     public static async Task<string?> FindEsp32PortAsync(CancellationToken ct = default)
     {
-        foreach (string name in SerialPort.GetPortNames())
+        // Filtered, not raw: each probe waits up to 2s for a ROM bootloader reply, so probing
+        // macOS's Bluetooth and debug-console pseudo-ports costs ~12s to learn nothing.
+        foreach (string name in SerialPortFilter.LikelyBoards(SerialPort.GetPortNames()))
         {
             if (await TryProbeAsync(name, ct))
                 return name;

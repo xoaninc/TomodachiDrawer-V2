@@ -125,284 +125,306 @@
         <ColumnDefinition Width="375" />
         <ColumnDefinition Width="*" />
       </Grid.ColumnDefinitions>
-      <Grid Grid.Column="0" Margin="0,0,6,0">
-        <Grid.RowDefinitions>
-          <RowDefinition Height="Auto" />
-          <RowDefinition Height="Auto" />
-          <RowDefinition Height="*" />
-          <RowDefinition Height="Auto" />
-          <RowDefinition Height="Auto" />
-          <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
-        <Border Grid.Row="0" Classes="group" Margin="0,0,0,6">
-          <StackPanel Spacing="6">
-            <TextBlock Classes="header" Text="Input Image" />
-            <Grid>
-              <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-              </Grid.ColumnDefinitions>
-              <TextBox
-                Grid.Column="0"
-                x:Name="ImagePathBox"
-                IsReadOnly="True"
-                PlaceholderText="No image loaded…"
-              />
-              <Button
-                Grid.Column="1"
-                Content="Open..."
-                Margin="4,0,0,0"
-                Click="OpenImageButton_Click"
-              />
-            </Grid>
-          </StackPanel>
-        </Border>
-        <Border Grid.Row="1" Classes="group" Margin="0,0,0,6">
-          <StackPanel Spacing="6">
-            <TextBlock Classes="header" Text="Routing" />
-            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
-              <TextBlock Grid.Column="0" Text="Switch Compatibility:" VerticalAlignment="Center" />
-              <ComboBox
-                Grid.Column="1"
-                x:Name="SwitchVersionComboBox"
-                SelectionChanged="SwitchVersionComboBox_SelectionChanged"
-                HorizontalAlignment="Stretch"
-                PlaceholderText="SELECT YOUR SWITCH!"
-              >
-                <ComboBoxItem>Switch 1/Lite/OLED</ComboBoxItem>
-                <ComboBoxItem>Switch 2</ComboBoxItem>
-              </ComboBox>
-            </Grid>
-            <StackPanel Orientation="Horizontal" Spacing="6">
-              <TextBlock Text="TSP Solver Time Limit" VerticalAlignment="Center" />
-              <!-- SafeNumericUpDown, not NumericUpDown: revert once Avalonia#21491 is fixed -->
-              <local:SafeNumericUpDown
-                x:Name="TSPTimeLimitUpDown"
-                Minimum="0.1"
-                Maximum="30"
-                Increment="0.1"
-                Value="0.5"
-                FormatString="F1"
-                Width="110"
-              />
-              <TextBlock Text="seconds" VerticalAlignment="Center" />
-              <Button Content="?" Width="28" Click="TSPHelpButton_Click" />
+      <!--
+        Scrollable, because this column has five Auto-height groups and one star row. Without a
+        scroller the Auto rows at the bottom - the RP2040 and ESP32 output panels - get clipped as
+        soon as the window is shorter than their combined natural height, and the controls inside
+        them simply cannot be reached.
+      -->
+      <ScrollViewer
+        Grid.Column="0"
+        Margin="0,0,6,0"
+        VerticalScrollBarVisibility="Auto"
+        HorizontalScrollBarVisibility="Disabled"
+      >
+        <Grid>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+          </Grid.RowDefinitions>
+          <Border Grid.Row="0" Classes="group" Margin="0,0,0,6">
+            <StackPanel Spacing="6">
+              <TextBlock Classes="header" Text="Input Image" />
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBox
+                  Grid.Column="0"
+                  x:Name="ImagePathBox"
+                  IsReadOnly="True"
+                  PlaceholderText="No image loaded…"
+                />
+                <Button
+                  Grid.Column="1"
+                  Content="Open..."
+                  Margin="4,0,0,0"
+                  Click="OpenImageButton_Click"
+                />
+              </Grid>
             </StackPanel>
-            <CheckBox
-              x:Name="EnableHomeCanvas"
-              Content="Auto Home Canvas To Top Left"
-              ToolTip.Tip="At the beginning, the program will zoom out, and set itself at the very very top left of the canvas. This is automatically checked for full size (256x256) images."
-              IsCheckedChanged="EnableHomeCanvas_IsCheckedChanged"
-            />
-            <Button
-              x:Name="ExportTDLDButton"
-              Content="Export to .tdld"
-              IsEnabled="False"
-              ToolTip.Tip="Saves the raw input stream as a .tdld file. This is the chip-agnostic format the firmware replays, so it is what to use for other players of it (Flipper Zero forks and the like) or to keep a drawing around without flashing anything."
-              HorizontalAlignment="Stretch"
-              Margin="0,6,0,0"
-              Click="ExportTDLDButton_Click"
-            />
-            <Button
-              x:Name="CancelDrawButton"
-              Content="Cancel Generation"
-              IsEnabled="False"
-              ToolTip.Tip="Stops the route generation in progress. Only affects generation on this computer — it cannot stop a drawing already running on the Switch."
-              HorizontalAlignment="Stretch"
-              Margin="0,6,0,0"
-              Click="CancelDrawButton_Click"
-            />
-            <CheckBox
-              x:Name="ReverseColourOrderCheckBox"
-              Content="Reverse Colour Order"
-              ToolTip.Tip="Draws the colour layers in the opposite order. Useful if a later layer keeps covering an earlier one in a way you do not want."
-              IsCheckedChanged="ReverseColourOrderCheckBox_IsCheckedChanged"
-            />
-          </StackPanel>
-        </Border>
-        <Border Grid.Row="2" Classes="group" Margin="0,0,0,6">
-          <DockPanel>
-            <TextBlock DockPanel.Dock="Top" Classes="header" Text="Log" />
-            <TextBox
-              x:Name="LogBox"
-              IsReadOnly="True"
-              AcceptsReturn="True"
-              TextWrapping="Wrap"
-              ScrollViewer.VerticalScrollBarVisibility="Auto"
-            />
-          </DockPanel>
-        </Border>
-        <Grid Grid.Row="3" Margin="0,0,0,6">
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="Auto" />
-          </Grid.ColumnDefinitions>
-          <TextBlock
-            Grid.Column="0"
-            x:Name="DrawTimeLabel"
-            Text="Draw Time Estimate: ???"
-            ToolTip.Tip="A generally very accurate estimate of how long the drawing will take, including all actions. Press Estimate to compute it before exporting."
-            FontSize="17"
-            FontWeight="Bold"
-            VerticalAlignment="Center"
-            Margin="2,0,2,0"
-          />
-          <Button
-            Grid.Column="1"
-            x:Name="EstimateButton"
-            Content="Estimate"
-            IsEnabled="False"
-            ToolTip.Tip="Generate the drawing route and show how long it will take, without flashing anything."
-            Margin="2,0,2,0"
-            Click="EstimateButton_Click"
-          />
-        </Grid>
-        <Border Grid.Row="4" Classes="group">
-          <TabControl x:Name="ChipTabControl">
-            <TabItem x:Name="RP2040Tab" Header="RP2040">
-              <StackPanel Spacing="5" Margin="0,4,0,0">
-                <TextBlock x:Name="RP2040StatusLabel" Text="RP2040: Not Found" />
-                <Grid ColumnDefinitions="*,*">
-                  <Button
-                    Grid.Column="0"
-                    x:Name="RP2040FlashButton"
-                    IsEnabled="False"
-                    Content="Flash Base Firmware"
-                    ToolTip.Tip="Flash the firmware that reads drawing data from the RP2040's flash."
-                    HorizontalAlignment="Stretch"
-                    Margin="2,0,2,0"
-                    Click="FlashFirmwareButton_Click"
-                  />
-                  <Button
-                    Grid.Column="1"
-                    x:Name="RP2040ExportButton"
-                    IsEnabled="False"
-                    Content="Export To RP2040!"
-                    ToolTip.Tip="Converts your image to a uf2 and copies it directly to a connected RP2040. Base firmware must be flashed first!"
-                    FontWeight="Bold"
-                    HorizontalAlignment="Stretch"
-                    Margin="2,0,2,0"
-                    Click="ExportToDeviceButton_Click"
-                  />
-                </Grid>
-                <Button
-                  x:Name="RP2040ExportUF2Button"
-                  IsEnabled="False"
-                  Content="Export to .UF2"
-                  ToolTip.Tip="Converts your image to a .uf2 file for manual transfer. Use this if auto-detection doesn't find your device. This can also be used to prepare drawings ahead of time — drag and drop the .uf2 onto the RPI-RP2 or RP2350 drive once it has finished another image."
-                  FontWeight="Bold"
-                  HorizontalAlignment="Stretch"
-                  Margin="2,0,0,0"
-                  Click="ExportUF2Button_Click"
+          </Border>
+          <Border Grid.Row="1" Classes="group" Margin="0,0,0,6">
+            <StackPanel Spacing="6">
+              <TextBlock Classes="header" Text="Routing" />
+              <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                <TextBlock
+                  Grid.Column="0"
+                  Text="Switch Compatibility:"
+                  VerticalAlignment="Center"
                 />
-              </StackPanel>
-            </TabItem>
-            <TabItem x:Name="RP2350Tab" Header="RP2350">
-              <StackPanel Spacing="5" Margin="0,4,0,0">
-                <TextBlock x:Name="RP2350StatusLabel" Text="RP2350: Not Found" />
-                <Grid ColumnDefinitions="*,*">
-                  <Button
-                    Grid.Column="0"
-                    x:Name="RP2350FlashButton"
-                    IsEnabled="False"
-                    Content="Flash Base Firmware"
-                    ToolTip.Tip="Flash the firmware that reads drawing data from the RP2350's flash."
-                    HorizontalAlignment="Stretch"
-                    Margin="2,0,2,0"
-                    Click="FlashFirmwareButton_Click"
-                  />
-                  <Button
-                    Grid.Column="1"
-                    x:Name="RP2350ExportButton"
-                    IsEnabled="False"
-                    Content="Export To RP2350!"
-                    ToolTip.Tip="Converts your image to a uf2 and copies it directly to a connected RP2350. Base firmware must be flashed first!"
-                    FontWeight="Bold"
-                    HorizontalAlignment="Stretch"
-                    Margin="2,0,2,0"
-                    Click="ExportToDeviceButton_Click"
-                  />
-                </Grid>
-                <Button
-                  x:Name="RP2350ExportUF2Button"
-                  IsEnabled="False"
-                  Content="Export to .UF2"
-                  ToolTip.Tip="Converts your image to a .uf2 file for manual transfer. Use this if auto-detection doesn't find your device. This can also be used to prepare drawings ahead of time — drag and drop the .uf2 onto the RPI-RP2 or RP2350 drive once it has finished another image."
-                  FontWeight="Bold"
+                <ComboBox
+                  Grid.Column="1"
+                  x:Name="SwitchVersionComboBox"
+                  SelectionChanged="SwitchVersionComboBox_SelectionChanged"
                   HorizontalAlignment="Stretch"
-                  Margin="2,0,0,0"
-                  Click="ExportUF2Button_Click"
+                  PlaceholderText="SELECT YOUR SWITCH!"
+                >
+                  <ComboBoxItem>Switch 1/Lite/OLED</ComboBoxItem>
+                  <ComboBoxItem>Switch 2</ComboBoxItem>
+                </ComboBox>
+              </Grid>
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <TextBlock Text="TSP Solver Time Limit" VerticalAlignment="Center" />
+                <!-- SafeNumericUpDown, not NumericUpDown: revert once Avalonia#21491 is fixed -->
+                <local:SafeNumericUpDown
+                  x:Name="TSPTimeLimitUpDown"
+                  Minimum="0.1"
+                  Maximum="30"
+                  Increment="0.1"
+                  Value="0.5"
+                  FormatString="F1"
+                  Width="110"
                 />
+                <TextBlock Text="seconds" VerticalAlignment="Center" />
+                <Button Content="?" Width="28" Click="TSPHelpButton_Click" />
               </StackPanel>
-            </TabItem>
-          </TabControl>
-        </Border>
-        <Border Grid.Row="5" Classes="group" Margin="0,6,0,0">
-          <StackPanel Spacing="5">
-            <TextBlock Classes="header" Text="ESP32-S3 Output (experimental)" />
+              <CheckBox
+                x:Name="EnableHomeCanvas"
+                Content="Auto Home Canvas To Top Left"
+                ToolTip.Tip="At the beginning, the program will zoom out, and set itself at the very very top left of the canvas. This is automatically checked for full size (256x256) images."
+                IsCheckedChanged="EnableHomeCanvas_IsCheckedChanged"
+              />
+              <Button
+                x:Name="ExportTDLDButton"
+                Content="Export to .tdld"
+                IsEnabled="False"
+                ToolTip.Tip="Saves the raw input stream as a .tdld file. This is the chip-agnostic format the firmware replays, so it is what to use for other players of it (Flipper Zero forks and the like) or to keep a drawing around without flashing anything."
+                HorizontalAlignment="Stretch"
+                Margin="0,6,0,0"
+                Click="ExportTDLDButton_Click"
+              />
+              <Button
+                x:Name="CancelDrawButton"
+                Content="Cancel Generation"
+                IsEnabled="False"
+                ToolTip.Tip="Stops the route generation in progress. Only affects generation on this computer — it cannot stop a drawing already running on the Switch."
+                HorizontalAlignment="Stretch"
+                Margin="0,6,0,0"
+                Click="CancelDrawButton_Click"
+              />
+              <CheckBox
+                x:Name="ReverseColourOrderCheckBox"
+                Content="Reverse Colour Order"
+                ToolTip.Tip="Draws the colour layers in the opposite order. Useful if a later layer keeps covering an earlier one in a way you do not want."
+                IsCheckedChanged="ReverseColourOrderCheckBox_IsCheckedChanged"
+              />
+            </StackPanel>
+          </Border>
+          <Border Grid.Row="2" Classes="group" Margin="0,0,0,6">
+            <DockPanel>
+              <TextBlock DockPanel.Dock="Top" Classes="header" Text="Log" />
+              <!--
+              MinHeight matters now that this sits inside a ScrollViewer: an unconstrained star row
+              collapses to its content, which for an empty log is nothing at all.
+            -->
+              <TextBox
+                x:Name="LogBox"
+                MinHeight="150"
+                IsReadOnly="True"
+                AcceptsReturn="True"
+                TextWrapping="Wrap"
+                ScrollViewer.VerticalScrollBarVisibility="Auto"
+              />
+            </DockPanel>
+          </Border>
+          <Grid Grid.Row="3" Margin="0,0,0,6">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
             <TextBlock
-              x:Name="ESP32StatusLabel"
-              Text="ESP32 Status: Not Found"
-              ToolTip.Tip="The ESP32-S3 only exposes a serial port while in download mode. Hold BOOT, tap RESET, release BOOT to enter it."
-            />
-            <ComboBox
-              x:Name="ESP32PortComboBox"
-              HorizontalAlignment="Stretch"
+              Grid.Column="0"
+              x:Name="DrawTimeLabel"
+              Text="Draw Time Estimate: ???"
+              ToolTip.Tip="A generally very accurate estimate of how long the drawing will take, including all actions. Press Estimate to compute it before exporting."
+              FontSize="17"
+              FontWeight="Bold"
+              VerticalAlignment="Center"
               Margin="2,0,2,0"
-              ToolTip.Tip="Serial port of the ESP32-S3 in download mode."
             />
-            <Grid>
-              <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="*" />
-              </Grid.ColumnDefinitions>
-              <Button
-                Grid.Column="0"
-                Content="Setup Steps (ESP32)"
-                ToolTip.Tip="Step-by-step guide for flashing and using the ESP32-S3."
+            <Button
+              Grid.Column="1"
+              x:Name="EstimateButton"
+              Content="Estimate"
+              IsEnabled="False"
+              ToolTip.Tip="Generate the drawing route and show how long it will take, without flashing anything."
+              Margin="2,0,2,0"
+              Click="EstimateButton_Click"
+            />
+          </Grid>
+          <Border Grid.Row="4" Classes="group">
+            <TabControl x:Name="ChipTabControl">
+              <TabItem x:Name="RP2040Tab" Header="RP2040">
+                <StackPanel Spacing="5" Margin="0,4,0,0">
+                  <TextBlock x:Name="RP2040StatusLabel" Text="RP2040: Not Found" />
+                  <Grid ColumnDefinitions="*,*">
+                    <Button
+                      Grid.Column="0"
+                      x:Name="RP2040FlashButton"
+                      IsEnabled="False"
+                      Content="Flash Base Firmware"
+                      ToolTip.Tip="Flash the firmware that reads drawing data from the RP2040's flash."
+                      HorizontalAlignment="Stretch"
+                      Margin="2,0,2,0"
+                      Click="FlashFirmwareButton_Click"
+                    />
+                    <Button
+                      Grid.Column="1"
+                      x:Name="RP2040ExportButton"
+                      IsEnabled="False"
+                      Content="Export To RP2040!"
+                      ToolTip.Tip="Converts your image to a uf2 and copies it directly to a connected RP2040. Base firmware must be flashed first!"
+                      FontWeight="Bold"
+                      HorizontalAlignment="Stretch"
+                      Margin="2,0,2,0"
+                      Click="ExportToDeviceButton_Click"
+                    />
+                  </Grid>
+                  <Button
+                    x:Name="RP2040ExportUF2Button"
+                    IsEnabled="False"
+                    Content="Export to .UF2"
+                    ToolTip.Tip="Converts your image to a .uf2 file for manual transfer. Use this if auto-detection doesn't find your device. This can also be used to prepare drawings ahead of time — drag and drop the .uf2 onto the RPI-RP2 or RP2350 drive once it has finished another image."
+                    FontWeight="Bold"
+                    HorizontalAlignment="Stretch"
+                    Margin="2,0,0,0"
+                    Click="ExportUF2Button_Click"
+                  />
+                </StackPanel>
+              </TabItem>
+              <TabItem x:Name="RP2350Tab" Header="RP2350">
+                <StackPanel Spacing="5" Margin="0,4,0,0">
+                  <TextBlock x:Name="RP2350StatusLabel" Text="RP2350: Not Found" />
+                  <Grid ColumnDefinitions="*,*">
+                    <Button
+                      Grid.Column="0"
+                      x:Name="RP2350FlashButton"
+                      IsEnabled="False"
+                      Content="Flash Base Firmware"
+                      ToolTip.Tip="Flash the firmware that reads drawing data from the RP2350's flash."
+                      HorizontalAlignment="Stretch"
+                      Margin="2,0,2,0"
+                      Click="FlashFirmwareButton_Click"
+                    />
+                    <Button
+                      Grid.Column="1"
+                      x:Name="RP2350ExportButton"
+                      IsEnabled="False"
+                      Content="Export To RP2350!"
+                      ToolTip.Tip="Converts your image to a uf2 and copies it directly to a connected RP2350. Base firmware must be flashed first!"
+                      FontWeight="Bold"
+                      HorizontalAlignment="Stretch"
+                      Margin="2,0,2,0"
+                      Click="ExportToDeviceButton_Click"
+                    />
+                  </Grid>
+                  <Button
+                    x:Name="RP2350ExportUF2Button"
+                    IsEnabled="False"
+                    Content="Export to .UF2"
+                    ToolTip.Tip="Converts your image to a .uf2 file for manual transfer. Use this if auto-detection doesn't find your device. This can also be used to prepare drawings ahead of time — drag and drop the .uf2 onto the RPI-RP2 or RP2350 drive once it has finished another image."
+                    FontWeight="Bold"
+                    HorizontalAlignment="Stretch"
+                    Margin="2,0,0,0"
+                    Click="ExportUF2Button_Click"
+                  />
+                </StackPanel>
+              </TabItem>
+            </TabControl>
+          </Border>
+          <Border Grid.Row="5" Classes="group" Margin="0,6,0,0">
+            <StackPanel Spacing="5">
+              <TextBlock Classes="header" Text="ESP32-S3 Output (experimental)" />
+              <TextBlock
+                x:Name="ESP32StatusLabel"
+                Text="ESP32 Status: Not Found"
+                ToolTip.Tip="The ESP32-S3 only exposes a serial port while in download mode. Hold BOOT, tap RESET, release BOOT to enter it."
+              />
+              <ComboBox
+                x:Name="ESP32PortComboBox"
                 HorizontalAlignment="Stretch"
                 Margin="2,0,2,0"
-                Click="Esp32ExplanationButton_Click"
+                ToolTip.Tip="Serial port of the ESP32-S3 in download mode."
               />
-              <Button
-                Grid.Column="1"
-                Content="In-Game setup Info."
-                ToolTip.Tip="How to set up Palette House in-game (same as the RP2040)."
-                HorizontalAlignment="Stretch"
-                Margin="2,0,2,0"
-                Click="InGameSetupButton_Click"
-              />
-            </Grid>
-            <Grid>
-              <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="*" />
-              </Grid.ColumnDefinitions>
-              <Button
-                Grid.Column="0"
-                x:Name="FlashEsp32FirmwareButton"
-                IsEnabled="False"
-                Content="Flash Base Firmware (ESP32)"
-                ToolTip.Tip="Flash the ESP32-S3 base firmware. Put the board in download mode first: hold BOOT, tap RESET, release BOOT."
-                HorizontalAlignment="Stretch"
-                Margin="2,0,2,0"
-                Click="FlashEsp32FirmwareButton_Click"
-              />
-              <Button
-                Grid.Column="1"
-                x:Name="ExportEsp32Button"
-                IsEnabled="False"
-                Content="Export To ESP32!"
-                ToolTip.Tip="Processes the image and flashes the drawing data to the ESP32-S3 tdld partition. Flash the base firmware once first."
-                FontWeight="Bold"
-                HorizontalAlignment="Stretch"
-                Margin="2,0,2,0"
-                Click="ExportEsp32Button_Click"
-              />
-            </Grid>
-          </StackPanel>
-        </Border>
-      </Grid>
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Button
+                  Grid.Column="0"
+                  Content="Setup Steps (ESP32)"
+                  ToolTip.Tip="Step-by-step guide for flashing and using the ESP32-S3."
+                  HorizontalAlignment="Stretch"
+                  Margin="2,0,2,0"
+                  Click="Esp32ExplanationButton_Click"
+                />
+                <Button
+                  Grid.Column="1"
+                  Content="In-Game setup Info."
+                  ToolTip.Tip="How to set up Palette House in-game (same as the RP2040)."
+                  HorizontalAlignment="Stretch"
+                  Margin="2,0,2,0"
+                  Click="InGameSetupButton_Click"
+                />
+              </Grid>
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Button
+                  Grid.Column="0"
+                  x:Name="FlashEsp32FirmwareButton"
+                  IsEnabled="False"
+                  Content="Flash Base Firmware (ESP32)"
+                  ToolTip.Tip="Flash the ESP32-S3 base firmware. Put the board in download mode first: hold BOOT, tap RESET, release BOOT."
+                  HorizontalAlignment="Stretch"
+                  Margin="2,0,2,0"
+                  Click="FlashEsp32FirmwareButton_Click"
+                />
+                <Button
+                  Grid.Column="1"
+                  x:Name="ExportEsp32Button"
+                  IsEnabled="False"
+                  Content="Export To ESP32!"
+                  ToolTip.Tip="Processes the image and flashes the drawing data to the ESP32-S3 tdld partition. Flash the base firmware once first."
+                  FontWeight="Bold"
+                  HorizontalAlignment="Stretch"
+                  Margin="2,0,2,0"
+                  Click="ExportEsp32Button_Click"
+                />
+              </Grid>
+            </StackPanel>
+          </Border>
+        </Grid>
+      </ScrollViewer>
 
       <!-- PREVIEW -->
 

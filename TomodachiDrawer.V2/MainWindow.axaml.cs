@@ -287,11 +287,35 @@ public partial class MainWindow : Window
             var releaseVersionTag =
                 responseJsonObject.RootElement.GetProperty("tag_name").GetString() ?? "0.0.0";
 
-            // see if its newer. TODO: Actually check that, only really effects using the artifacts from the release build before
-            // i've published the release though.
+            // Compare as versions, not as strings. The old check was `latest != ours`, which
+            // announces an "update" whenever the tag merely differs — including when ours is NEWER,
+            // which is exactly what anyone running a build ahead of the last tag sees. It told you
+            // 0.5.0 could be updated to 0.4.1.
             if (releaseVersionTag != null)
             {
-                if (releaseVersionTag != ourVersion)
+                // Both TryParse calls run unconditionally: with && the second is skipped when the
+                // first fails, leaving `ours` unassigned.
+                bool haveLatest = Version.TryParse(
+                    releaseVersionTag.TrimStart('v', 'V'),
+                    out var latest
+                );
+                bool haveOurs = Version.TryParse(ourVersion.TrimStart('v', 'V'), out var ours);
+                bool parsed = haveLatest && haveOurs;
+
+                if (parsed && latest <= ours)
+                {
+                    AppendLog(
+                        latest == ours
+                            ? $"Up to date! {ourVersion}"
+                            : $"Running {ourVersion}, ahead of the latest release ({releaseVersionTag}). No update needed."
+                    );
+                }
+                else if (!parsed && releaseVersionTag == ourVersion)
+                {
+                    // Unparseable but identical: still clearly not an update.
+                    AppendLog($"Up to date! {ourVersion}");
+                }
+                else
                 {
                     _ = ShowMessageAsync(
                         "Update available",
@@ -303,10 +327,6 @@ public partial class MainWindow : Window
                         new Uri("https://github.com/xoaninc/TomodachiDrawer-V2/releases"),
                         "Open Releases"
                     );
-                }
-                else
-                {
-                    AppendLog($"Up to date! {ourVersion}");
                 }
             }
         }
@@ -483,6 +503,7 @@ public partial class MainWindow : Window
 
     private const string esp32FirmwareFileName = "TomodachiDrawer.Firmware.ESP32.bin";
     private string[] _esp32Ports = Array.Empty<string>();
+    private string[] _esp32HiddenPorts = Array.Empty<string>();
 
     private static string GetEsp32FirmwareFilePath()
     {
@@ -502,13 +523,33 @@ public partial class MainWindow : Window
             while (!_cts.Token.IsCancellationRequested)
             {
                 string[] ports;
+                string[] hiddenPorts;
                 try
                 {
-                    ports = SerialPort.GetPortNames().Distinct().OrderBy(p => p).ToArray();
+                    // GetPortNames() is not a list of devices. On macOS it also returns
+                    // Bluetooth-Incoming-Port, the debug console, and an entry per paired Bluetooth
+                    // audio device — so a machine with nothing plugged in still offered six ports
+                    // and asked the user to pick the right one out of six wrong answers.
+                    ports = SerialPortFilter.LikelyBoards(
+                        SerialPort.GetPortNames(),
+                        out hiddenPorts
+                    );
                 }
                 catch
                 {
                     ports = Array.Empty<string>();
+                    hiddenPorts = Array.Empty<string>();
+                }
+
+                // Say what was hidden, once per change, so a board on an unrecognised bridge does
+                // not just silently fail to appear.
+                if (!_esp32HiddenPorts.SequenceEqual(hiddenPorts))
+                {
+                    _esp32HiddenPorts = hiddenPorts;
+                    if (hiddenPorts.Length > 0)
+                        AppendLog(
+                            $"Ignoring {hiddenPorts.Length} serial port(s) that cannot be a board: {string.Join(", ", hiddenPorts)}"
+                        );
                 }
 
                 await Dispatcher.UIThread.InvokeAsync(() =>

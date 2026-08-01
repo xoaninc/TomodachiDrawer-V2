@@ -183,6 +183,26 @@ static void push_report(void) {
     }
 }
 
+// Waiting for a drawing: the data region is erased, so nothing has been exported to the board yet.
+//
+// Deliberately NOT error_flash. This is the normal state immediately after flashing the base
+// firmware, and showing the red error blink there reads as "the board is broken" when nothing is
+// wrong at all - which is exactly how it was reported. Slow blue pulse instead: calm, clearly not
+// an alarm, and distinguishable at a glance from every red pattern.
+//
+// A truncated write that lost the header also lands here rather than in a red state. That is
+// acceptable because the remedy is identical either way: export the drawing again.
+static void waiting_for_drawing(void) {
+    while (true) {
+        neopixel_set_rgb(0, 0, NEOPIXEL_ABITLESSBRIGHT);
+        boringpixel_set(true);
+        delay_ms_usb(900);
+        neopixel_set_rgb(0, 0, 0);
+        boringpixel_set(false);
+        delay_ms_usb(900);
+    }
+}
+
 // error thing. flashes red.
 // todo: make this more human friendly (flash different colours? or patterns?)
 static void error_flash(int interval_ms) {
@@ -304,6 +324,18 @@ int main(void) {
     }
 
     const uint8_t *ptr = flash_contents;
+
+    // An erased header means no drawing has been exported yet - a fresh board that has only had the
+    // base firmware flashed. Checked BEFORE the magic test, because otherwise erased flash reads as
+    // "bad magic" and blinks red at a user who has done nothing wrong.
+    bool header_erased = true;
+    for (int i = 0; i < 6; i++) {
+        if (ptr[i] != 0xFF) {
+            header_erased = false;
+            break;
+        }
+    }
+    if (header_erased) waiting_for_drawing(); // never returns
 
     // Validate TDLD magic ("TomoDachi Life Drawer")
     if (ptr[0] != 'T' || ptr[1] != 'D' || ptr[2] != 'L' || ptr[3] != 'D') {

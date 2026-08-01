@@ -167,6 +167,24 @@ static void send_report_raw(void) {
     tud_hid_report(0, current_report, sizeof(current_report));
 }
 
+// How long the pre-playback window lasts, in half-second flashes. 6 => 6 seconds.
+// Sized for the first-ever connection of a board, which is the slow case; a reconnect needs far
+// less. Erring long is nearly free here and erring short costs the entire drawing.
+#define COUNTDOWN_FLASHES 6
+
+// Neutral reports at roughly a real controller's rate, for the given duration.
+//
+// This is the part that makes the console register us: a steady stream of reports looks like a
+// controller, six reports spread over three seconds does not. send_report_raw already pumps
+// tud_task while waiting for the endpoint, so USB stays serviced throughout.
+static void stream_neutral_reports(uint32_t ms) {
+    absolute_time_t end = make_timeout_time_ms(ms);
+    while (!time_reached(end)) {
+        send_report_raw();
+        delay_ms_usb(8);
+    }
+}
+
 // send report and update neopixel. used during actual playback.
 static void push_report(void) {
     send_report_raw();
@@ -310,17 +328,26 @@ int main(void) {
         tud_task();
     }
 
-    // 3 flash countdown, this is mostly just for there to be some
-    // time for the switch to acknowledge things. On that note: we send empty neutral inputs here
-    // so the switch expects us when we start playing back.
-    // Otherwise it seemed to be off by one.
-    for (int i = 0; i < 3; i++) {
+    // Countdown, and more importantly the window in which the Switch decides we are a controller.
+    //
+    // tud_mounted() above only means USB configuration finished. The console's own controller
+    // registration happens after that and takes noticeably longer the FIRST time a given board is
+    // plugged in, and anything sent before it completes is simply dropped. The original note here
+    // said "otherwise it seemed to be off by one", which is the same effect seen from closer up.
+    //
+    // Two things were wrong. It waited 3s, which is not enough on a first connection - reported as a
+    // drawing that came out shifted down, with a gap at the top, on the first plug-in and correct on
+    // the second. And it sent only SIX reports across that whole window, because delay_ms_usb just
+    // pumps tud_task without reporting - so there was almost nothing for the console to register.
+    //
+    // Now it streams neutral reports at a controller-like rate for the whole window. ~125/s for 6s
+    // is ~750 reports instead of 6. The extra seconds are irrelevant against a drawing measured in
+    // hours, and the failure it prevents ruins the whole drawing.
+    for (int i = 0; i < COUNTDOWN_FLASHES; i++) {
         neopixel_set_rgb(NEOPIXEL_BRIGHT, NEOPIXEL_BRIGHT, 0);
-        send_report_raw();
-        delay_ms_usb(500);
+        stream_neutral_reports(500);
         neopixel_set_rgb(0, 0, 0);
-        send_report_raw();
-        delay_ms_usb(500);
+        stream_neutral_reports(500);
     }
 
     const uint8_t *ptr = flash_contents;

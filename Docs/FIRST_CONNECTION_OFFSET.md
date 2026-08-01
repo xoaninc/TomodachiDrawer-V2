@@ -1,4 +1,7 @@
-# The first-connection offset — investigation record
+# Canvas desyncs — investigation record
+
+> Originally opened for the first-connection offset; widened 2026-08-01 when a second, mid-draw
+> sighting arrived. Both fit the same mechanism family.
 
 **Symptom (Juan, 2026-08-01):** first time a board is plugged into the Switch, the drawing
 *sometimes* comes out shifted **down**, gap at the top, otherwise clean. Replug → correct.
@@ -94,6 +97,42 @@ before it can ship.
   3. Edge-overdrive homing for 256×256 drawings regardless of the checkbox (dpad against the
      top/left clamps; ~13 s, absorbs any accumulated early error). The strongest fix if
      mechanism 1 is confirmed.
+
+## Second sighting (2026-08-01, same evening): mid-draw, rightward
+
+A long draw (Switch 2, RP2040-Zero) ran **correctly for ~2 hours, then desynced: everything from
+that point painted shifted to the RIGHT**. The session log was lost (the app was restarted while
+it held the only copy — the reason `AppendLog` now also writes to a file under
+`ApplicationData/TomodachiDrawerV2/logs/`).
+
+What this sighting establishes:
+
+- **It is not a first-connection phenomenon** — registration was hours in the past. The
+  connect-window mechanisms (and the `e72f621` settle fix) are irrelevant to it.
+- **Direction matched travel, not a fixed axis.** Down at the start of one run, right in the
+  middle of another — exactly what mechanism 1 predicts (an over-held dpad repeats in whichever
+  direction the route was moving when the stall hit) and what eaten-input mechanisms do not:
+  dropped presses cause *under*-movement, shifting content the *opposite* way to travel, and the
+  menu-desync signatures that come with eaten inputs were absent (2 hours of correct drawing).
+- An overshoot is a one-time event: believed position never re-syncs, so **everything after it
+  carries the same offset** — consistent with "the rest of the drawing was shifted", not smeared.
+
+**Mechanism 1 (delayed dpad release → in-game auto-repeat overshoot) is now the primary
+suspect for both sightings.** Open question that would falsify it: whether the failed runs'
+colours were correct (they appear to have been).
+
+### The mitigation that fits: periodic re-sync against the canvas clamp
+
+The believed cursor position cannot be read back, so desyncs cannot be *detected* — but they can
+be *absorbed*: navigate to a corner and overdrive past it (the clamp eats the extra), which
+re-establishes a known position no matter what error has accumulated. This is the genre-standard
+defence (Switch-Fightstick `SYNC_POSITION`, img2splat cautious mode).
+
+Sketch for V2: between colour layers, instead of navigating directly to the next layer's first
+point, navigate to (0,0) **plus a fixed overdrive margin** (~30 extra UPLEFT taps ≈ 1.5 s), then
+proceed from a now-certain (0,0). Cost ≈ the corner detour + margin per layer — a few minutes on
+a 2-hour draw — and it bounds any desync's blast radius to a single layer. Not implemented yet:
+it changes what gets drawn, so it belongs after the 0.5.0 gate, or in it if Juan prefers.
 
 ## Discriminating questions for the next hardware session
 

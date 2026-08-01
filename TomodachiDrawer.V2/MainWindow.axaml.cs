@@ -85,6 +85,9 @@ public partial class MainWindow : Window
 
         GetSettings();
 
+        // First line of every session, so the file copy is discoverable from the pane itself.
+        AppendLog($"Log also saved to: {LogFilePath}");
+
         DragDrop.SetAllowDrop(this, true);
         AddHandler(DragDrop.DropEvent, OnDrop);
         AddHandler(DragDrop.DragOverEvent, OnDragOver);
@@ -861,6 +864,23 @@ public partial class MainWindow : Window
     }
     #endregion
 
+    /// <summary>
+    /// One log file per app session, next to <c>settings.json</c> in application data.
+    /// <para>
+    /// Exists because the log pane is the only record of a drawing run, drawing runs take hours,
+    /// and closing the app destroyed it — which is exactly what happened to a 2-hour session log
+    /// that was about to be used for debugging a desync. The pane stays the primary view; this is
+    /// the copy that survives.
+    /// </para>
+    /// </summary>
+    private static readonly string LogFilePath = Path.Combine(
+        Path.GetDirectoryName(AppSettings.FilePath)!,
+        "logs",
+        $"tomodachidrawer-{DateTime.Now:yyyyMMdd-HHmmss}.log"
+    );
+
+    private static readonly object LogFileLock = new();
+
     private void AppendLog(string msg)
     {
         Dispatcher.UIThread.Post(() =>
@@ -868,6 +888,21 @@ public partial class MainWindow : Window
             LogBox.Text = (LogBox.Text ?? "") + msg + "\n";
             LogBox.CaretIndex = LogBox.Text?.Length ?? 0;
         });
+
+        // Never let disk logging break the app: no disk space, a read-only sandbox, or a weird
+        // AppData path should cost the file copy, not the session.
+        try
+        {
+            lock (LogFileLock)
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(LogFilePath)!);
+                File.AppendAllText(LogFilePath, $"[{DateTime.Now:HH:mm:ss}] {msg}\n");
+            }
+        }
+        catch
+        {
+            // Deliberately swallowed — see above.
+        }
     }
 
     // messagebox replacement

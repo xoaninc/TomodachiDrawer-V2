@@ -12,6 +12,15 @@ Updated 2026-08-01: the solver now prices A-hold runs, cutting hold-run breaks 2
 image. Layer ordering was also implemented, measured, and **reverted** — it made drawings longer.
 Both written up in [`POST_0.5.0_IDEAS.md`](./POST_0.5.0_IDEAS.md).
 
+**Gate update (2026-08-01 night): 0.5.0 is NOT shippable yet.** Juan's first long hardware run
+desynced after ~2 hours (everything painted shifted right from one moment on), and his ~10
+drawings on 0.4.1/ESP32-S3 were clean — investigation in
+[`FIRST_CONNECTION_OFFSET.md`](./FIRST_CONNECTION_OFFSET.md). Two mitigations landed the same
+night: a per-layer cursor re-sync against the canvas clamp (`c7cd67c`, costs ~4.7 min on a 2 h
+draw, bounds any desync to one layer) and the RP firmware now re-asserts controller state before
+every Delay record like the ESP32 always did (`4b8b9c9`). **The release gate now includes a full
+long draw completing without visible desync.**
+
 ## What to do next
 
 1. **Test on hardware** → [`HARDWARE_VALIDATION_0.5.0.md`](./HARDWARE_VALIDATION_0.5.0.md).

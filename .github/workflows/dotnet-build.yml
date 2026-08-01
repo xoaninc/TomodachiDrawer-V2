@@ -69,6 +69,28 @@ jobs:
       run: |
         cmake -G Ninja -B build-${{ matrix.platform }} -DPICO_BOARD=${{ matrix.board }} -DPICO_PLATFORM=${{ matrix.platform }}
         cmake --build build-${{ matrix.platform }} --parallel
+    # The .uf2 is committed under TomodachiDrawer.V2/ so a fresh clone can flash a board without
+    # first hunting down CI artifacts. Committed binaries go stale silently, so this makes that a
+    # red build instead: the committed file must equal a fresh build of the source next to it.
+    #
+    # This relies on the firmware build being reproducible, which it is - no __DATE__/__TIME__ and a
+    # fixed pico_set_program_version. If that ever stops holding, relax this to a size/section check
+    # rather than deleting it, otherwise the staleness trap comes straight back.
+    - name: Committed firmware must match this build
+      run: |
+        built="TomodachiDrawer.Firmware/build-${{ matrix.platform }}/TomodachiDrawer.Firmware.${{ matrix.platform }}.uf2"
+        committed="TomodachiDrawer.V2/TomodachiDrawer.Firmware.${{ matrix.platform }}.uf2"
+        if [ ! -f "$committed" ]; then
+          echo "::error::$committed is missing. Download the ${{ matrix.platform }} firmware artifact from this run and commit it."
+          exit 1
+        fi
+        if ! cmp -s "$built" "$committed"; then
+          echo "::error::$committed is stale - it does not match a fresh build of TomodachiDrawer.Firmware/."
+          echo "Download the ${{ matrix.platform }} firmware artifact from this run and commit it over the top."
+          ls -l "$built" "$committed"
+          exit 1
+        fi
+        echo "Committed ${{ matrix.platform }} firmware matches this build."
     - name: Upload firmware artifact
       uses: actions/upload-artifact@v7
       with:

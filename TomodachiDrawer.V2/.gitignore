@@ -1,2 +1,3 @@
-# Pico firmware UF2s are built in CI (per board) and downloaded at publish time, not committed.
-TomodachiDrawer.Firmware*.uf2
+# The Pico firmware UF2s ARE committed (see the csproj's CopyToOutputDirectory), so that a clone
+# can flash a board without downloading CI artifacts first. CI verifies they match a fresh build of
+# TomodachiDrawer.Firmware/ on every push, so a stale binary here is a red build, not a silent trap.

@@ -188,6 +188,28 @@ same image's `.tdld` with 0.4.1 code (`git checkout ba1fd2f`, build, export) and
 RP2040-Zero. Desync ⇒ board/firmware, not 0.5.0's stream. Clean ⇒ the 0.5.0 stream changes come
 back under suspicion.
 
+## The generation itself is clean — verified against upstream directly (2026-08-02)
+
+Upstream 0.8.3's Core was built from source at its tag and both Cores ran the same photo (Juan's
+actual test image, Arbitrary/15, serial path) through an identical harness into
+`FileControllerSink`. Decoding both streams opcode-by-opcode:
+
+- **Event-for-event identical for the first 1,892 events.** The whole risk surface — handshake,
+  homing, erase-all, bucket select, colour pick, bucket click — is the first ~220 events and
+  matches exactly.
+- First divergence is inside layer 1's stamp route: ours takes a different (shorter) path to the
+  same points, which is the optimal cut + tap objective working as designed. Totals on that image:
+  ours 80,178 taps, upstream 81,762 (−1.9%).
+- The long straight-run profile (max consecutive UP/DOWN/LEFT/RIGHT) has the same shape in both,
+  with upstream's runs slightly longer — so long runs are normal routing, not artifacts.
+
+So after the re-sync revert there is **no stream-level regression versus upstream**, and the
+remaining suspect for the original mid-draw desync is the board/firmware side — where the Delay
+re-assert fix now matches the ESP32's behaviour. Harness recipe if it needs re-running: worktree
+at `upstream-tags/0.8.3`, one shared `Program.cs` compiled against each Core, decoder in the
+session scratchpad (`tdld_decode.py` — 6-byte header, opcodes in the high nibble, RLE 0xE/0xF,
+0x0 = end marker).
+
 ## Discriminating questions for the next hardware session
 
 1. **How tall was the gap?** ~2 px → mechanism 2. Several-to-tens of px → mechanism 1.

@@ -1,33 +1,44 @@
-# Where the project stands — 2026-07-30
+# Where the project stands — 2026-08-02, after the first hardware night
 
-Written at the end of a long session so nothing depends on remembering it. Start here.
+Written so nothing depends on remembering the sessions. Start here.
 
 ## One-line status
 
-`main` is at **0.5.0, unreleased and untagged**, ahead of the last release (0.4.1) by everything
-below. CI green on all five platforms × Debug/Release plus both firmwares. 62 tests. 0 warnings.
-**The only thing standing between here and a release is testing on real hardware.**
+`main` is at **0.5.0, unreleased and untagged**, 77 tests, 0 warnings, CI green.
+**The release gate is a clean long draw on hardware** — the first attempt desynced, the cause was
+found and removed, and the retry has not happened yet.
 
-Updated 2026-08-01: the solver now prices A-hold runs, cutting hold-run breaks 2–7% on every bench
-image. Layer ordering was also implemented, measured, and **reverted** — it made drawings longer.
-Both written up in [`POST_0.5.0_IDEAS.md`](./POST_0.5.0_IDEAS.md).
+## What the hardware night established (2026-08-01 → 02)
 
-**Gate update (2026-08-01 night): 0.5.0 is NOT shippable yet.** Juan's first long hardware run
-desynced after ~2 hours (everything painted shifted right from one moment on), and his ~10
-drawings on 0.4.1/ESP32-S3 were clean — investigation in
-[`FIRST_CONNECTION_OFFSET.md`](./FIRST_CONNECTION_OFFSET.md). Two mitigations landed the same
-night: a per-layer cursor re-sync against the canvas clamp (`c7cd67c`, costs ~4.7 min on a 2 h
-draw, bounds any desync to one layer) and the RP firmware now re-asserts controller state before
-every Delay record like the ESP32 always did (`4b8b9c9`). **The release gate now includes a full
-long draw completing without visible desync.**
+The full record is [`FIRST_CONNECTION_OFFSET.md`](./FIRST_CONNECTION_OFFSET.md). The short version:
 
-## What to do next
+1. **The first long draw desynced after ~2 h** (shifted right from one moment on). Investigation
+   produced two mitigations that night.
+2. **One of them was wrong and caused the *next* failure itself**: the per-layer corner re-sync
+   drove the cursor into the canvas edge — and Juan then established on hardware that the cursor
+   **leaves the canvas onto the game's UI buttons** at the edge (neither clamp nor pan). Reverted
+   (`a710541`). Edge-overdrive techniques are permanently unavailable to this project.
+3. **The other stands**: the RP firmware re-asserts controller state before every Delay record
+   (`4b8b9c9`), mirroring the ESP32 — the board with Juan's 10/10 clean record. Also kept: the
+   6 s streaming settle on first connection (`e72f621`).
+4. **Our generation has no other regression — proven, not assumed.** Upstream 0.8.3's Core was
+   built from source at its tag and both programs ran the same photo through an identical harness:
+   the decoded streams are **event-for-event identical for the first 1,892 events** (the entire
+   handshake/homing/erase-all/bucket/colour prefix is the first ~220 and matches exactly), then
+   diverge inside layer-1 routing by design. Ours: 80,178 taps vs upstream's 81,762 (−1.9%).
+5. Upstream's repo update of 2026-07-31 is dependabot only (SkiaSharp 4.151, Avalonia bumps).
+   Nothing to port.
 
-1. **Test on hardware** → [`HARDWARE_VALIDATION_0.5.0.md`](./HARDWARE_VALIDATION_0.5.0.md).
-   That checklist is the release gate. Item 1 (erase-all before bucket fill) is the risky one.
-2. **If it passes:** tag `0.5.0` and push the tag. CI publishes the artifacts automatically —
-   nothing is published until a tag exists.
-3. **If it fails:** the fixes are cheap and localised; the checklist says what to capture.
+## What to do next (in order)
+
+1. **Restart the app** (the running binary may predate the revert) and **RE-EXPORT the drawing**:
+   any `.tdld`/UF2 generated on the night of 2026-08-01 contains the reverted re-sync taps and
+   will misbehave even though the code is fixed. The firmware on the board is fine if flashed
+   after `63d0bca`.
+2. **Retry the long draw** → [`HARDWARE_VALIDATION_0.5.0.md`](./HARDWARE_VALIDATION_0.5.0.md)
+   plus: the draw must complete without visible desync. If it desyncs again, the A/B experiment
+   that isolates board-vs-stream is written in `FIRST_CONNECTION_OFFSET.md`.
+3. **If everything passes:** tag `0.5.0`, push the tag, CI publishes.
 
 Two decisions are still open and are yours:
 

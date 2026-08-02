@@ -7,7 +7,13 @@ the route bench in `Docs/bench/`), but the four items below need a real Switch.
 Do not tag 0.5.0 until §1 and §2 pass. If something fails, the fix is cheap — say so and it gets
 fixed before release rather than after.
 
-Build to test with: `main` after the 0.8.3 sync merge, or the `sync/upstream-0.8.3` branch.
+Build to test with: `main` at `a710541` or later.
+
+**⚠ Re-export before testing.** Any `.tdld`/UF2 generated on the night of 2026-08-01 contains the
+taps of a reverted change (the corner re-sync) baked into the data and will misbehave even on
+fixed code. Restart the app, load the image, export again. One extra item this round: **a long
+draw must complete without visible desync** — see `FIRST_CONNECTION_OFFSET.md` for what to capture
+if it doesn't.
 
 ## Which board?
 

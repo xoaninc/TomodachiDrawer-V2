@@ -134,6 +134,27 @@ proceed from a now-certain (0,0). Cost ≈ the corner detour + margin per layer 
 a 2-hour draw — and it bounds any desync's blast radius to a single layer. Not implemented yet:
 it changes what gets drawn, so it belongs after the 0.5.0 gate, or in it if Juan prefers.
 
+## ⚠ The corner re-sync was WRONG and is reverted (`a710541`)
+
+Shipped and reverted the same night. It drove the cursor into the top and left edges 32 taps per
+axis per layer — and this program's own in-game setup text has always said that *"the cursor
+[desyncs] as the canvas moves when the cursor gets on the edges"*
+(`MainWindow.axaml.cs:1654`). **Edge behaviour can be a canvas PAN, not a clamp**, and to code
+that cannot read the cursor back the two are indistinguishable. So the insurance manufactured the
+exact desync it was meant to absorb: 960 edge collisions on a 15-layer drawing, and the reported
+result was a drawing that went to a corner at the start of a layer and was shifted thereafter.
+
+**The offline verification quoted for it proved nothing.** "paint constant, render 100,00%" cannot
+see this class of change: the renderer replays paint *intents* in image coordinates and does not
+model the in-game cursor, so anything that only alters where the physical cursor ends up is
+invisible to it by construction. There is no offline test in this repo capable of catching it.
+
+**Prerequisite for any future attempt:** answer clamp-vs-pan on hardware first. One manual test —
+in Palette House, fully zoomed out, push the dpad into the canvas edge and watch: does the cursor
+stop, or does the view scroll? If it pans, edge-overdrive re-syncing is unavailable to this
+project entirely and the mitigation must come from somewhere else (e.g. re-homing via the Move
+tool, which is menu-driven and immune).
+
 ## Mitigations shipped (2026-08-01 night), their audited limits
 
 Both landed after Juan confirmed the 0.4.1-era clean record (10/10) was on the **ESP32-S3** —

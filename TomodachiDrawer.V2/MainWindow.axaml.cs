@@ -1365,6 +1365,9 @@ public partial class MainWindow : Window
         drawer.ConnectAndConfirmController();
         await drawer.DrawImage(img, settings, cancellationToken);
 
+        // Same wording as upstream, so the two programs' logs read side by side.
+        AppendLog($"True complete overall time is: {timingSink.TotalTime.TotalSeconds}s");
+
         var fileSink = new FileControllerSink(tempPath);
         timingSink.ReplayTo(fileSink);
         fileSink.Dispose();

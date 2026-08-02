@@ -149,11 +149,14 @@ see this class of change: the renderer replays paint *intents* in image coordina
 model the in-game cursor, so anything that only alters where the physical cursor ends up is
 invisible to it by construction. There is no offline test in this repo capable of catching it.
 
-**Prerequisite for any future attempt:** answer clamp-vs-pan on hardware first. One manual test —
-in Palette House, fully zoomed out, push the dpad into the canvas edge and watch: does the cursor
-stop, or does the view scroll? If it pans, edge-overdrive re-syncing is unavailable to this
-project entirely and the mitigation must come from somewhere else (e.g. re-homing via the Move
-tool, which is menu-driven and immune).
+**ANSWERED on hardware (Juan, 2026-08-02): it is neither clamp nor pan — the cursor LEAVES the
+canvas.** Pushing the dpad past the top-left edge moves the cursor slowly off the canvas and onto
+the game's UI buttons above it. So edge-overdrive re-syncing is not merely risky, it is
+**unavailable to this project, permanently**: overdrive taps walk the cursor onto UI controls,
+which both desyncs the position AND risks clicking interface buttons. This matches the observed
+failure exactly ("goes to a corner at the start, then does strange things"). Any future
+re-sync must come from menu-driven navigation (e.g. the Move tool, as `HomeCanvasToTopLeft`
+does), never from raw dpad travel against an edge.
 
 ## Mitigations shipped (2026-08-01 night), their audited limits
 

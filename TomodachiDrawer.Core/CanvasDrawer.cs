@@ -374,7 +374,7 @@ namespace TomodachiDrawer.Core
                         ? $"{tspSink.TotalTime.TotalSeconds:F3}s"
                         : "no solution";
                     _log(
-                        $"[{layerNumber}/{totalLayers}] {l.Colour.DisplayName}: snake={snakeSink.TotalTime.TotalSeconds:F3}s, tsp={tspPart} -> {(usedSnake ? "snake" : "tsp")}"
+                        $"[{layerNumber}/{totalLayers}] {l.Colour.DisplayName} ({l.FineDetailPoints.Count} pts): snake={snakeSink.TotalTime.TotalSeconds:F3}s, tsp={tspPart} -> {(usedSnake ? "snake" : "tsp")}"
                     );
                 }
 

@@ -58,6 +58,16 @@ namespace TomodachiDrawer.Bench
             string? outPath = OptionalArg(args, "--out");
             string? renderDir = OptionalArg(args, "--render-out");
 
+            // A real photo behaves nothing like the synthetic set: its colours come from a
+            // quantizer rather than a wheel, and a full-canvas opaque one takes the bucket-fill
+            // and erase-all path. Being able to point the harness at the exact file that ran on
+            // hardware is what makes a hardware failure checkable offline.
+            string? imagePath = OptionalArg(args, "--image");
+
+            // The app turns this on by itself for a full-canvas image, so a run meant to reproduce
+            // one has to say so explicitly here.
+            bool homeToTopLeft = args.Contains("--home");
+
             // Upstream's colour merge is on in production and always has been, so every number in
             // Docs/bench/ already includes it and none of them say what it is worth. This turns it
             // off so the difference can be read directly off `layers=` and `draw=`.
@@ -67,6 +77,7 @@ namespace TomodachiDrawer.Bench
                 $"tsp={tspLimit}s repeats={repeats} quantizer={quantizer} colours={colours} "
                     + $"switch={version} cores={Environment.ProcessorCount} "
                     + $"colour-merge={(mergeColours ? "on" : "OFF")} "
+                    + $"home={(homeToTopLeft ? "on" : "off")} "
                     + $"config={(IsDebug() ? "DEBUG (wall-clock not meaningful)" : "RELEASE")}"
             );
 
@@ -85,13 +96,16 @@ namespace TomodachiDrawer.Bench
                     8,
                     version,
                     null,
-                    mergeColours
+                    mergeColours,
+                    false
                 );
             Console.WriteLine("done");
 
             var results = new List<Result>();
 
-            foreach (var (name, bitmap) in TestImages.All())
+            var images = imagePath is null ? TestImages.All() : [LoadImage(imagePath)];
+
+            foreach (var (name, bitmap) in images)
             {
                 using var bmp = bitmap;
                 foreach (var arm in Arms)
@@ -110,7 +124,8 @@ namespace TomodachiDrawer.Bench
                             colours,
                             version,
                             renderDir,
-                            mergeColours
+                            mergeColours,
+                            homeToTopLeft
                         );
                         if (best is null || r.DPadTaps < best.DPadTaps)
                             best = r;
@@ -157,7 +172,8 @@ namespace TomodachiDrawer.Bench
             int colours,
             SwitchVersion version,
             string? renderDir,
-            bool mergeColours
+            bool mergeColours,
+            bool homeToTopLeft
         )
         {
             var settings = new DrawImageSettings
@@ -167,7 +183,7 @@ namespace TomodachiDrawer.Bench
                 TSPTimeLimit = tspLimit,
                 DisableLargeBrush = false,
                 EnableExperimentalFeatures = false,
-                HomeToTopLeft = false,
+                HomeToTopLeft = homeToTopLeft,
             };
 
             var timing = new TimingSink();
@@ -223,6 +239,32 @@ namespace TomodachiDrawer.Bench
                 sw.Elapsed.TotalSeconds,
                 comparison
             );
+        }
+
+        /// <summary>
+        /// Loads an image the way the app does — same decode, same downscale filter, same 256px
+        /// cap. Anything else here would be measuring a different picture than the one the user
+        /// drew, which defeats the purpose of pointing the harness at a real file.
+        /// </summary>
+        private static (string Name, SKBitmap Bitmap) LoadImage(string path)
+        {
+            var img =
+                SKBitmap.Decode(path)
+                ?? throw new InvalidOperationException($"Cannot decode {path}");
+
+            if (img.Width > CanvasDrawer.CanvasWidth || img.Height > CanvasDrawer.CanvasHeight)
+            {
+                float scale = Math.Min(
+                    (float)CanvasDrawer.CanvasWidth / img.Width,
+                    (float)CanvasDrawer.CanvasHeight / img.Height
+                );
+                img = img.Resize(
+                    new SKImageInfo((int)(img.Width * scale), (int)(img.Height * scale)),
+                    new SKSamplingOptions(SKCubicResampler.CatmullRom)
+                );
+            }
+
+            return (Path.GetFileNameWithoutExtension(path), img);
         }
 
         private static void Save(SKBitmap bmp, string path)

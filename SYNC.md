@@ -52,7 +52,7 @@ Recorded so a cold session does not re-litigate a fetch that has already been do
 
 | Checked | Upstream head | New commits | Verdict |
 |---|---|---|---|
-| 2026-09-01 | `d413307`, tag **0.8.4** = `1642d59` | 8 | **Nothing to port.** |
+| 2026-09-01 | `d413307`, tag **0.8.4** = `1642d59` | 8 | **No code to port; dependency versions taken.** |
 
 All eight are dependabot (SkiaSharp 4.151.0 → 4.151.1, `System.IO.Ports` 10.0.11, Sentry 6.9.0 —
 Sentry being a package V2 does not carry) plus one csharpier pass. The pass touched
@@ -65,6 +65,16 @@ git diff -w --stat upstream-tags/0.8.3..upstream/master -- TomodachiDrawer.Core/
 
 comes back with the SkiaSharp line in the csproj and nothing else. `0.8.4` is a dependency
 release. The tag landed in `refs/upstream-tags/0.8.4`, so the namespace split above is holding.
+
+Its dependency versions **were** taken, later the same day (`f55999d`), along with the rest of a
+sweep that cleared five dependabot PRs open since July. Two of those PRs were behind upstream and
+were closed as superseded rather than merged — going to 4.151.0 when upstream is on 4.151.1 is
+divergence, not maintenance. V2 and upstream now agree on Avalonia 12.1.1, SkiaSharp 4.151.1
+(+ Linux native assets) and System.IO.Ports 10.0.11.
+
+SkiaSharp is the one to re-verify rather than assume, since it decodes and quantizes: after the
+bump the 256x256 photo still renders **100.00% with a byte-identical PNG** (same MD5). Do the same
+check on any future SkiaSharp bump — `Docs/FIRST_CONNECTION_OFFSET.md` has the command.
 
 ## Ported in this sync (0.6.0 → 0.8.3)
 

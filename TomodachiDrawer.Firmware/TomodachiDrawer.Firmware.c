@@ -54,6 +54,12 @@ typedef uint16_t gamepad_button_t;
 // Report layout: [Btn1, Btn2, DPad, LX, LY, RX, RY, Padding]
 static uint8_t current_report[8] = {0x00, 0x00, 0x08, 128, 128, 128, 128, 0x00};
 
+// Tap timing, read out of the header. Zero and false mean the historical millisecond behaviour.
+// Defaults for the poll counts live on the host side; a v3 file never sets these.
+static bool     taps_use_polls   = false;
+static uint16_t tap_hold_polls   = 0;
+static uint16_t tap_release_polls = 0;
+
 const uint8_t *flash_contents = (const uint8_t *)(XIP_BASE + FLASH_TARGET_OFFSET);
 
 // mapping C#'s Button enum (A=0, B=1, X=2, Y=3, ...) to report bits
@@ -70,7 +76,13 @@ const uint8_t stick_axis_map[] = {
 
 
 // opcodes are from FileControllerSink.cs, same for version.
-#define TDLD_VERSION 0x03
+//
+// Two header versions are accepted. v3 is what every board in the field speaks and stays the
+// default; v4 differs ONLY in the header and in how long a tap is held - see tap_half().
+// Accepting both rather than replacing one with the other is deliberate: .tdld files already
+// exported have to keep working, and so do boards flashed with older firmware.
+#define TDLD_VERSION_MS_TAPS    0x03 // 6-byte header,  taps held for a fixed 25ms
+#define TDLD_VERSION_POLL_TAPS  0x04 // 16-byte header, taps held for N host polls
 
 // All opcodes are stored in the upper nibble (4 bits)
 #define OPCODE_INVALID          0x0 // "invalid" to avoid boring 0x00 files in hex editor originally, repurposed for EOF.
@@ -201,6 +213,28 @@ static void push_report(void) {
     }
 }
 
+// One half of a tap: publish the new controller state, then hold it there.
+//
+// Millisecond mode is the original behaviour: send once, sleep 25ms. The sleep assumes the console
+// polled us during it, and a console busy rendering may not have - a tap nobody looked at never
+// happened, the cursor does not move, and every stroke after it lands a cell off. That is the
+// leading suspect for drawings that shift hours in.
+//
+// Poll mode instead re-sends the state until the console has actually taken it `polls` times, so a
+// tap cannot elapse inside a window where nobody was looking. send_report_raw already blocks on
+// tud_hid_ready() while pumping tud_task, so each iteration is exactly one delivered report.
+// push_report has already delivered one, hence starting at 1: `polls` is the total.
+static void tap_half(uint16_t polls) {
+    push_report();
+    if (taps_use_polls) {
+        for (uint16_t i = 1; i < polls; i++) {
+            send_report_raw();
+        }
+    } else {
+        delay_ms_usb(25);
+    }
+}
+
 // Waiting for a drawing: the data region is erased, so nothing has been exported to the board yet.
 //
 // Deliberately NOT error_flash. This is the normal state immediately after flashing the base
@@ -292,23 +326,20 @@ static void run_single_byte_opcode(uint8_t record) {
             hid_release_all();
             push_report();
             break;
-        // Tap: press -> 25ms -> release -> 25ms
+        // Tap: press -> hold -> release -> settle. How long each half lasts is tap_half's
+        // business, and depends on the header version.
         // This exists for storage saving, because the alternative is 4 records, which would be 6 bytes (1+2+1+2)
         case OPCODE_TAP_BUTTON:
             hid_press(button_map[nibble]);
-            push_report();
-            delay_ms_usb(25);
+            tap_half(tap_hold_polls);
             hid_release(button_map[nibble]);
-            push_report();
-            delay_ms_usb(25);
+            tap_half(tap_release_polls);
             break;
         case OPCODE_TAP_DPAD:
             hid_set_dpad(nibble);
-            push_report();
-            delay_ms_usb(25);
+            tap_half(tap_hold_polls);
             hid_set_dpad(DPAD_NEUTRAL);
-            push_report();
-            delay_ms_usb(25);
+            tap_half(tap_release_polls);
             break;
         default:
             error_flash(5000); // corruption?
@@ -369,11 +400,21 @@ int main(void) {
         error_flash(250); // fast blink = bad magic. todo: better error reporting lol
         return 0;
     }
-    if (ptr[4] != TDLD_VERSION) {
+    const uint8_t version = ptr[4];
+    if (version != TDLD_VERSION_MS_TAPS && version != TDLD_VERSION_POLL_TAPS) {
         error_flash(1000); // slow blink = wrong version
         return 0;
     }
-    ptr += 6; // 4-byte magic + 1-byte version + 1-byte padding
+
+    if (version == TDLD_VERSION_POLL_TAPS) {
+        // 4-byte magic + 1-byte version + hold (2, LE) + release (2, LE), padded out to 16.
+        taps_use_polls    = true;
+        tap_hold_polls    = (uint16_t)ptr[5] | ((uint16_t)ptr[6] << 8);
+        tap_release_polls = (uint16_t)ptr[7] | ((uint16_t)ptr[8] << 8);
+        ptr += 16;
+    } else {
+        ptr += 6; // 4-byte magic + 1-byte version + 1-byte padding
+    }
 
     uint8_t last_1byte_record = 0; // for Repeat opcodes.
     bool working = true;

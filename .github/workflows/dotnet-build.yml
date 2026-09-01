@@ -32,6 +32,17 @@ jobs:
       run: dotnet build --configuration ${{ matrix.configuration }} --no-restore
     - name: Test
       run: dotnet test --configuration ${{ matrix.configuration }} --no-build --verbosity normal /p:EnableWindowsTargeting=true
+  # The ESP32 parser has 28 host-runnable checks that, until now, no machine ran: the only runner
+  # was a PowerShell script. They matter more than most, because that firmware's binary cannot
+  # currently be rebuilt here - there is no ESP-IDF job below - so pinning the source's behaviour is
+  # the only guard there is that source and shipped binary still agree.
+  test-esp32-parser:
+    name: ESP32 tdld parser (host tests)
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+    - name: Run host tests
+      run: ./TomodachiDrawer.Firmware.ESP32/test/run_host_tests.sh
   build-rp-firmware:
     name: Compile ${{ matrix.platform }} Firmware
     runs-on: ubuntu-latest

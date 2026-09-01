@@ -58,6 +58,25 @@ static void test_wrong_version(void) {
     CHECK(tdld_init(&ctx, data, sizeof(data)) == false, name);
 }
 
+// v4 is the host's poll-timed tap format: 16-byte header, tap length measured in HID polls
+// instead of milliseconds. This firmware does not implement it, and that is a decision rather than
+// an omission - its binary cannot currently be rebuilt by anyone (no local ESP-IDF, no CI job), so
+// it must keep speaking exactly the format its shipped binary speaks.
+//
+// Refusing v4 is therefore the CORRECT behaviour, not a gap: the board flashes its error pattern
+// instead of reading a 16-byte header as if it were 6 and replaying the poll counts as input
+// records. This test exists so that nobody "fixes" the rejection without also rebuilding and
+// reflashing the binary.
+static void test_v4_poll_header_is_rejected(void) {
+    const char *name = "v4_poll_header_rejected";
+    // A well-formed v4 header: magic, version 4, hold=22 and release=3 little-endian, padded to 16.
+    uint8_t data[] = {'T',  'D',  'L',  'D',  0x04, 22,   0x00, 3,
+                      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                      0x00};
+    tdld_ctx_t ctx;
+    CHECK(tdld_init(&ctx, data, sizeof(data)) == false, name);
+}
+
 static void test_too_short(void) {
     const char *name = "too_short";
     uint8_t data[] = {'T', 'D', 'L'};
@@ -219,6 +238,7 @@ int tdld_run_all_tests(void) {
     printf("=== tdld_parser tests ===\n");
     test_bad_magic();
     test_wrong_version();
+    test_v4_poll_header_is_rejected();
     test_too_short();
     test_valid_header_inits_neutral();
     test_tap_button_a();

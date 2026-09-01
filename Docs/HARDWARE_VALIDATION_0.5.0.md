@@ -1,13 +1,22 @@
 # Hardware validation — 0.5.0
 
-**This is the release gate.** 0.5.0 changes *what gets drawn*, and no amount of CI can see that.
-Everything else in this release is verified offline (62 unit tests, 27 firmware parser checks, and
-the route bench in `Docs/bench/`), but the four items below need a real Switch.
+> **This stopped being a release gate on 2026-09-01.** 0.5.0 shipped with **none** of it run: no
+> board was available and none was in prospect, and the call was to release rather than sit on
+> finished work indefinitely. That is a real risk, taken knowingly and stated in the release notes.
+>
+> It is now a **post-release checklist**. The first person to get a Switch in front of this should
+> work through it. Anything it finds is a 0.5.1 — and §1 is still the item most likely to find
+> something.
 
-Do not tag 0.5.0 until §1 and §2 pass. If something fails, the fix is cheap — say so and it gets
-fixed before release rather than after.
+0.5.0 changes *what gets drawn*, and no amount of CI can see that. Everything else in this release
+is verified offline (80 unit tests, 28 firmware parser checks, a 100.00% render match on the exact
+photo that desynced in August, and the route bench in `Docs/bench/`), but the items below need a
+real Switch.
 
-Build to test with: `main` at `a710541` or later.
+Build to test with: the released **0.5.0**.
+
+**Re-flash the board's base firmware first.** The RP firmware changed in 0.5.0 — it now reads both
+tap-timing formats — so a board still carrying 0.4.x cannot run a v4 drawing at all.
 
 **⚠ Re-export before testing.** Any `.tdld`/UF2 generated on the night of 2026-08-01 contains the
 taps of a reverted change (the corner re-sync) baked into the data and will misbehave even on
@@ -126,6 +135,30 @@ dropped. A single real draw of any image confirms it end to end — nothing spec
 - **Reverse Colour Order** — toggling it must actually change the drawing. If the log says
   "Reusing cached route" after toggling it, that is a fingerprint bug; report it (there is a test
   guarding this, so it should not happen).
+
+---
+
+## 6. The poll-timing A/B — the reason to *want* a desync
+
+New in 0.5.0: **Options → "Time Taps in HID Polls"** (off by default, RP2040/RP2350 only). Instead
+of holding each tap for a fixed 25ms, the firmware holds it until the console has actually asked
+for the report a set number of times. A 25ms sleep assumes the console looked; a console busy
+rendering may not have, and every tap it misses shifts the rest of the drawing by one cell.
+
+If a long draw desyncs, **do not just report it — run the same image again with the checkbox on.**
+Same board, same photo, one variable. Months of this project's guessing collapse into one result:
+
+| Default | Poll timing | Verdict |
+|---|---|---|
+| desyncs | clean | Dropped taps confirmed. Poll timing becomes the default, slowness and all |
+| desyncs | desyncs | Not dropped taps. Look at the canvas type (#173) and the dock (#97) instead |
+| clean | — | Nothing to chase this run |
+
+Expect it to draw **more slowly**. That is why upstream shelved the idea, and it is not a reason to
+skip the experiment: a slow drawing that finishes beats a fast one that shifts.
+
+**Neither this project nor upstream has ever run this against a real Switch.** Whatever happens is
+new information.
 
 ---
 

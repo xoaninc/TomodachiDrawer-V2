@@ -39,6 +39,13 @@ It has a crossplatform Avalonia UI desktop app that flashes directly to an **RP2
   each layer starts) — but since 0.5 they are **shorter**: measured 2-5% less pen travel and
   3-7% shorter drawings than solving serially. See [`Docs/bench/`](./Docs/bench/) for the numbers
   and how to reproduce them.
+- **Tap timing in HID polls (0.5, experimental, RP2040/RP2350 only)** — an opt-in menu item that
+  makes the firmware hold each tap until the console has actually polled it a set number of times,
+  instead of for a fixed 25ms. A 25ms sleep assumes the console looked during it, and one tap it
+  missed shifts the rest of the drawing by a cell — the leading suspect for draws that go wrong
+  hours in. **Off by default and never verified against a real Switch**, by this project or by
+  upstream, who shelved the idea because it draws more slowly. It writes a different `.tdld` format
+  (v4); an ESP32 board refuses that file, and the app exports the standard format for ESP32 anyway.
 - **Reliable, verified ESP32-S3 flashing (0.4)** — every write is now checked against the device's
   own flash MD5 and re-flashed if needed. Previously a flash could silently truncate, leaving a
   drawing that hung on its last layer (LED stuck, never finishing); the parsers also now stop safely

@@ -700,6 +700,22 @@ public partial class MainWindow : Window
 
         var imageSnapshot = _currentImage!.Copy();
         var drawSettings = GetDrawImageSettings();
+
+        // Poll-timed taps are a v4 file, and the ESP32 firmware only speaks v3 — it would refuse
+        // the drawing and sit there flashing its error pattern, looking for all the world like a
+        // dead board. Override rather than refuse: the setting is documented RP-only, the ESP32 is
+        // the board with the clean long-draw record so it has nothing to gain here, and a user who
+        // asked for a drawing should get one. Say so loudly, because silently ignoring a setting is
+        // its own kind of bug.
+        if (drawSettings.TapTiming == TapTimingMode.HidPolls)
+        {
+            drawSettings.TapTiming = TapTimingMode.Milliseconds;
+            AppendLog(
+                "NOTE: \"Time Taps in HID Polls\" is RP2040/RP2350 only — exporting this drawing "
+                    + "with the standard millisecond timing so the ESP32-S3 can read it."
+            );
+        }
+
         var token = BeginGeneration();
 
         BusyExporting = true;

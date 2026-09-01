@@ -4,9 +4,17 @@ Written so nothing depends on remembering the sessions. Start here.
 
 ## One-line status
 
-`main` is at **0.5.0, unreleased and untagged**, 77 tests, 0 warnings, CI green.
-**The release gate is a clean long draw on hardware** — the first attempt desynced, the cause was
-found and removed, and the retry has not happened yet.
+**0.5.0 is released**, 80 tests + 28 firmware parser checks, 0 warnings.
+
+**It shipped without a single hardware check, and that was a deliberate call**, taken on
+2026-09-01 with no board available and no prospect of one. The gate that was written for this
+release — a clean long draw — was never run. Everything in
+[`HARDWARE_VALIDATION_0.5.0.md`](./HARDWARE_VALIDATION_0.5.0.md) is now a **post-release**
+checklist: the first person with a Switch should work through it, and anything it finds is a 0.5.1.
+
+What *is* verified is everything offline: the drawing renders at 100.00% against the quantized
+source — including, since 2026-09-01, the exact photo that desynced on hardware, byte-identical
+across three solver arms and two TSP budgets.
 
 ## What the hardware night established (2026-08-01 → 02)
 
@@ -57,10 +65,12 @@ upstream and both programs share the same assumptions. The long draw still has t
 
 ## What to do next (in order)
 
-1. **Restart the app** (the running binary may predate the revert) and **RE-EXPORT the drawing**:
-   any `.tdld`/UF2 generated on the night of 2026-08-01 contains the reverted re-sync taps and
-   will misbehave even though the code is fixed. The firmware on the board is fine if flashed
-   after `63d0bca`.
+0. **Re-flash the board's base firmware before anything else.** 0.5.0 changed the RP firmware
+   (it now reads both tap-timing formats), so a board still carrying 0.4.x firmware cannot run a
+   v4 drawing at all — it slow-blinks "wrong version". Re-flashing also costs nothing if you only
+   ever use the default format.
+1. **RE-EXPORT the drawing**: any `.tdld`/UF2 generated on the night of 2026-08-01 contains the
+   reverted re-sync taps and will misbehave even though the code is fixed.
 2. **Retry the long draw** → [`HARDWARE_VALIDATION_0.5.0.md`](./HARDWARE_VALIDATION_0.5.0.md)
    plus: the draw must complete without visible desync. If it desyncs again, the A/B experiment
    that isolates board-vs-stream is written in `FIRST_CONNECTION_OFFSET.md`.
@@ -70,7 +80,18 @@ upstream and both programs share the same assumptions. The long draw still has t
    would cost minutes instead of hours. If it desyncs anyway, the next code lead is upstream's
    shelved `experimental-hid-tweaks`, which sizes taps in **HID polls instead of milliseconds**.
    All three are written up in `FIRST_CONNECTION_OFFSET.md` §"Upstream has a desync corpus".
-3. **If everything passes:** tag `0.5.0`, push the tag, CI publishes.
+3. **Anything that fails is a 0.5.1**, not a blocked release — 0.5.0 is already out.
+
+### The one new thing to try when a desync happens again
+
+0.5.0 ships **"Time Taps in HID Polls"** (Options menu, off by default, RP2040/RP2350 only). It
+holds each tap until the console has actually polled it, instead of for a fixed 25ms — the fix for
+"the console was busy and never looked". Ported from upstream's shelved `experimental-hid-tweaks`.
+
+That makes a clean A/B possible for the first time: same image, same board, one checkbox. If the
+default desyncs and poll timing does not, the mechanism is settled after months of guessing. Note
+it draws more slowly — that is why upstream shelved it, and it is not a reason to avoid the
+experiment.
 
 Two decisions are still open and are yours:
 

@@ -1,4 +1,4 @@
-# Where the project stands — 2026-08-02, after the first hardware night
+# Where the project stands — 2026-09-01 (offline re-check), after the first hardware night
 
 Written so nothing depends on remembering the sessions. Start here.
 
@@ -29,6 +29,32 @@ The full record is [`FIRST_CONNECTION_OFFSET.md`](./FIRST_CONNECTION_OFFSET.md).
 5. Upstream's repo update of 2026-07-31 is dependabot only (SkiaSharp 4.151, Avalonia bumps).
    Nothing to port.
 
+## What the 2026-09-01 offline re-check added
+
+Nothing was rebuilt or re-decided; two questions that were still open got answered without
+hardware.
+
+1. **The failing image renders perfectly.** The photo that desynced
+   (`ab6761610000e5eb…-2.jpeg`, Arbitrary/15, Switch 2, auto-home) had never been rendered — the
+   bench images had. It now comes back **100.00% match, byte-identical PNG** on all three solver
+   arms, `missing=0 wrongColour=0 extra=0`, identical coverage across arms. So the drawing
+   generated for *that* image is exonerated, and the desync has no cause on our side of the wire.
+   Detail and the reproduction command: [`FIRST_CONNECTION_OFFSET.md`](./FIRST_CONNECTION_OFFSET.md).
+   The bench grew `--image <path>` and `--home` to make this repeatable.
+2. **Upstream at 0.8.4: nothing to port from `master`.** Eight commits since the marker, all
+   dependabot plus a csharpier pass; `git diff -w` over their Core is empty but for a SkiaSharp
+   version line. Recorded in [`../SYNC.md`](../SYNC.md) §"Re-checks since the marker".
+3. **But there is plenty outside `master`, and we had never looked.** Their issue tracker holds
+   months of other people's desync reports, and a shelved branch attacks the mechanism directly
+   (taps timed in HID polls rather than milliseconds). Written up in
+   [`FIRST_CONNECTION_OFFSET.md`](./FIRST_CONNECTION_OFFSET.md); two feature ideas from the same
+   tracker — diff-image repair and large-brush-over-dither — went to
+   [`POST_0.5.0_IDEAS.md`](./POST_0.5.0_IDEAS.md).
+
+**The release gate has not moved.** Comparing against upstream can only ever prove *no
+regression*; it cannot prove correctness, because the menu-navigation constants were ported from
+upstream and both programs share the same assumptions. The long draw still has to happen.
+
 ## What to do next (in order)
 
 1. **Restart the app** (the running binary may predate the revert) and **RE-EXPORT the drawing**:
@@ -38,6 +64,12 @@ The full record is [`FIRST_CONNECTION_OFFSET.md`](./FIRST_CONNECTION_OFFSET.md).
 2. **Retry the long draw** → [`HARDWARE_VALIDATION_0.5.0.md`](./HARDWARE_VALIDATION_0.5.0.md)
    plus: the draw must complete without visible desync. If it desyncs again, the A/B experiment
    that isolates board-vs-stream is written in `FIRST_CONNECTION_OFFSET.md`.
+   **Two free controls added 2026-09-01, from upstream's issue tracker:** run the console
+   **undocked** (#97: docked failed 100% at 20-30 min, undocked ran 1.5 h clean), and note that
+   #173 blames the **full square canvas** specifically — proving it on a TV-cropped canvas first
+   would cost minutes instead of hours. If it desyncs anyway, the next code lead is upstream's
+   shelved `experimental-hid-tweaks`, which sizes taps in **HID polls instead of milliseconds**.
+   All three are written up in `FIRST_CONNECTION_OFFSET.md` §"Upstream has a desync corpus".
 3. **If everything passes:** tag `0.5.0`, push the tag, CI publishes.
 
 Two decisions are still open and are yours:

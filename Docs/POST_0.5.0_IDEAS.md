@@ -164,6 +164,26 @@ colour*, which ruins the whole drawing. So it needs real margin, and it ranks be
   it — give a target time, let the app search colour count and denoiser to meet it — is a search over
   the existing pipeline, and it only became practical because generation is now 5–8× faster.
 
+## From upstream's issue tracker (read 2026-09-01)
+
+Their tracker is a source of ideas we had never mined. Two are worth filing here; the desync
+reports live in [`FIRST_CONNECTION_OFFSET.md`](./FIRST_CONNECTION_OFFSET.md) instead.
+
+- **Diff-image repair** ([#159](https://github.com/Lucas7yoshi/TomodachiDrawer/issues/159)).
+  Splork, the equivalent tool for Splatoon 3, fixes a desynced drawing after the fact: take a
+  screenshot, extract the canvas, diff it against the source, and generate a small repair drawing
+  for just the wrong cells. It treats desync as recoverable instead of fatal, which is a different
+  and cheaper bet than preventing it. **We are unusually well placed to build it**: the trace
+  renderer already produces exactly the "what the canvas should look like" bitmap that the diff
+  needs — half the work exists. Pairs naturally with "resume from a checkpoint" above.
+- **Large brush over areas that get repainted**
+  ([#155](https://github.com/Lucas7yoshi/TomodachiDrawer/issues/155)). In dithered regions the
+  drawer places single pixels for every colour, when it could stamp the whole zone in colour A with
+  one big brush and then place only colour B's pixels over it — the wrong cells get covered anyway.
+  This is a real routing idea, and unlike §1–§4 it reduces the *point count* rather than the travel
+  between points, so it composes with everything already measured. Needs a cost model: a stamp is
+  cheap only if the overpaint it causes is cheaper than the pixels it saves.
+
 ## What the other projects in this space do
 
 Looked at 2026-08-01, prompted by Juan finding them.

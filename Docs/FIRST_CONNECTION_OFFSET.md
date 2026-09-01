@@ -210,6 +210,106 @@ at `upstream-tags/0.8.3`, one shared `Program.cs` compiled against each Core, de
 session scratchpad (`tdld_decode.py` — 6-byte header, opcodes in the high nibble, RLE 0xE/0xF,
 0x0 = end marker).
 
+## The failing image itself renders perfectly (2026-09-01)
+
+The audit above had a hole nobody noticed at the time: the **bench images** were rendered
+(100.00%) but never deep-stream-compared, and **Juan's photo** was stream-compared but never
+rendered. The one image that actually desynced on hardware had never had its painted output
+checked.
+
+It has now. `ab6761610000e5ebdf36dc25c19fb55f6100761f-2.jpeg` (the file named in
+`logs/tomodachidrawer-20260802-003405.log`, the session that flashed the RP2040 at 00:34:22) run
+back through `TraceRenderer` with that session's settings — Arbitrary, colour limit 16, Switch 2,
+auto-home, 256x256, colour merge on:
+
+```sh
+dotnet run --project TomodachiDrawer.Bench -c Release -- \
+  --image ~/Downloads/ab6761610000e5ebdf36dc25c19fb55f6100761f-2.jpeg \
+  --quantizer Arbitrary --colours 16 --switch 2 --home --tsp 5.0 --render-out /tmp/r
+```
+
+`--tsp 5.0` is not a guess: the app does not use the `DrawImageSettings` default of 1.0s, it
+overwrites the box on image load with `CanvasDrawer.GetRecommendedTSPSolveTime(w, h)`, which
+returns **5.0s** for anything above 192² (`CanvasDrawer.Tsp.cs:28`). Quote tap counts from this
+table only against runs at the same limit — the limit is in the route fingerprint for a reason.
+
+| Arm | dpad taps | paint actions | colours | render |
+|---|---|---|---|---|
+| serial | 76,546 | 33,669 | 16 | **100.00%** (65536/65536) |
+| parallel | 77,986 | 33,669 | 16 | **100.00%** |
+| parallel-1thread | 77,513 | 33,669 | 16 | **100.00%** |
+
+`missing=0 wrongColour=0 extra=0` on all three. Stronger than the percentage: the three rendered
+PNGs and the quantized reference are **byte-identical** (same MD5). Identical `paint=33669` across
+arms means the parallel path — the one the app actually ships — changes the route and not the
+picture.
+
+The same run at `--tsp 1.0` produces different tap counts (78,331 / 79,271 / 78,726) and **the
+same PNG, to the byte**. Two different TSP budgets and three solver arms, six routes, one picture:
+route quality and painted output are independent, which is the property the whole optimisation
+effort has been assuming.
+
+`colours=16` against the log's 15 scanned layers is the documented off-by-one: the bucket-fill
+colour is a picker trip but not a layer.
+
+**What this rules out.** The drawing generated for that photo is not wrong, not partially wrong,
+and not wrong only on the parallel path. Combined with the stream comparison above, the desync had
+no cause on our side of the wire. The suspicion stays on board/firmware, where `4b8b9c9` now
+matches the ESP32's behaviour — and now that rests on evidence for *this* image, not inference
+from `mosaic256`.
+
+**What it does not rule out**, and this is the reason the hardware gate exists: the trace records
+what the drawer *intends*, and both programs share the menu-navigation constants. `CanvasToolbar.cs`
+— eraser submenu geometry included — is byte-identical to upstream's modulo comments
+(`git diff -w upstream/master HEAD -- TomodachiDrawer.Core/CanvasToolbar.cs` is two comment lines
+and a `using`). Two programs agreeing that "erase all" is row 4 is not evidence that it is row 4
+in-game. That question is only answerable on a Switch.
+
+## Upstream has a desync corpus, and we had never read it (2026-09-01)
+
+Everything above was reasoned from our own two nights. Upstream's tracker has been collecting
+other people's failures for months, and one of their abandoned branches attacks the mechanism
+directly. None of it was in these docs.
+
+### The lead worth acting on: poll-count sync instead of wall-clock delays
+
+Branch `upstream/experimental-hid-tweaks`, tip `ca2f156` (2026-05-06), one commit ahead of master
+and never merged. It replaces the tap timing in the RP firmware:
+
+```c
+// before: press, send, sleep 25ms, release, send, sleep 25ms
+hid_press(...);  push_report();  delay_ms_usb(25);
+// after: press, then wait for the console to actually poll us N times
+hid_press(...);  wait_reports(tap_hold_polls);
+```
+
+`wait_reports` spins on `tud_hid_ready()` and re-sends `current_report` once per poll, so a tap
+lasts a number of **host polls** rather than a number of **milliseconds**. That is exactly the
+shape of fix a slow accumulating desync wants: a 25 ms sleep assumes the console polled during it,
+and a console that is busy rendering may not have. Dropped taps accumulate; the drawing shifts.
+
+The author shelved it with the commit message "**NOTE: Is slower..?**" — which is a verdict on
+*throughput*, and our problem is a 2-hour draw surviving, not finishing sooner. Worth re-testing on
+its own terms.
+
+Costs, in fairness: it bumps `TDLD_VERSION` to `0x04` and widens the header to 16 bytes carrying
+the hold/release poll counts (defaults 22 and 3, credited in-comment to "wigreal's findings"), so
+it is a format change on both sides, and our `.tdld` writer and both firmwares would have to move
+together.
+
+### Field reports, and how they line up with our failure
+
+| Issue | Report | Fit with ours |
+|---|---|---|
+| [#173](https://github.com/Lucas7yoshi/TomodachiDrawer/issues/173) | Desyncs track the **in-game canvas type**: full square canvases fail, TV-cropped ones are reliable, regardless of colour count. Theory: the game cannot hold framerate on a full square canvas | **Ours was 256x256, a full square canvas.** Fits |
+| [#97](https://github.com/Lucas7yoshi/TomodachiDrawer/issues/97) | Docked desyncs 100% of the time at 20-30 min; undocked ran 1.5 h clean (Switch 1) | Untested by us. Costs nothing to control for |
+| [#115](https://github.com/Lucas7yoshi/TomodachiDrawer/issues/115) | Switch 2, stops around a 1.5 h estimate | Different symptom — theirs *stops*, ours kept drawing shifted |
+| [#153](https://github.com/Lucas7yoshi/TomodachiDrawer/issues/153) | Proposes periodic re-homing to the top-left corner as a desync fix | **We tried this and reverted it** (`a710541`). Juan established on hardware that the cursor leaves the canvas onto the game's UI buttons at the edge — neither clamps nor pans. That is knowledge this thread does not have |
+
+The two cheap controls for the next attempt, neither of which is a code change: run **undocked**,
+and consider proving the mechanism on a **TV-cropped canvas** before spending another two hours on
+a square one. If #173 is right, the square canvas is the variable, not our stream.
+
 ## Discriminating questions for the next hardware session
 
 1. **How tall was the gap?** ~2 px → mechanism 2. Several-to-tens of px → mechanism 1.

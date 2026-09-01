@@ -46,6 +46,26 @@ namespace has been polluted again.
 
 Full analysis of this sync: [`Docs/UPSTREAM_SYNC_AUDIT.md`](./Docs/UPSTREAM_SYNC_AUDIT.md).
 
+### Re-checks since the marker
+
+Recorded so a cold session does not re-litigate a fetch that has already been done.
+
+| Checked | Upstream head | New commits | Verdict |
+|---|---|---|---|
+| 2026-09-01 | `d413307`, tag **0.8.4** = `1642d59` | 8 | **Nothing to port.** |
+
+All eight are dependabot (SkiaSharp 4.151.0 → 4.151.1, `System.IO.Ports` 10.0.11, Sentry 6.9.0 —
+Sentry being a package V2 does not carry) plus one csharpier pass. The pass touched
+`Core/CanvasDrawer.Tsp.cs`, which looks alarming in a `--stat` and is not: reflowing a nested
+`for` and deleting a trailing space. The mechanical check, which is the one to trust:
+
+```sh
+git diff -w --stat upstream-tags/0.8.3..upstream/master -- TomodachiDrawer.Core/
+```
+
+comes back with the SkiaSharp line in the csproj and nothing else. `0.8.4` is a dependency
+release. The tag landed in `refs/upstream-tags/0.8.4`, so the namespace split above is holding.
+
 ## Ported in this sync (0.6.0 → 0.8.3)
 
 ### Dependencies

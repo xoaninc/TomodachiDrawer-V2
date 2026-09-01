@@ -1147,6 +1147,9 @@ public partial class MainWindow : Window
             EarlyTspExitEnabled = _currentSettings.EarlyTspExitEnabled,
             EarlyTspExitRateCoefficient = _currentSettings.EarlyTspExitRateCoefficient,
             EarlyTspExitSolutionsDistance = _currentSettings.EarlyTspExitSolutionsDistance,
+            TapTiming = _currentSettings.UseHidPollTapTiming
+                ? TapTimingMode.HidPolls
+                : TapTimingMode.Milliseconds,
         };
     }
 
@@ -1368,7 +1371,13 @@ public partial class MainWindow : Window
         // Same wording as upstream, so the two programs' logs read side by side.
         AppendLog($"True complete overall time is: {timingSink.TotalTime.TotalSeconds}s");
 
-        var fileSink = new FileControllerSink(tempPath);
+        // Poll-timed taps are a different file format (v4, 16-byte header), so the choice has to
+        // be made here rather than inside the sink. Anything but HidPolls writes the v3 file every
+        // board in the field already speaks.
+        var fileSink =
+            settings.TapTiming == TapTimingMode.HidPolls
+                ? new FileControllerSink(tempPath, settings.TapHoldPolls, settings.TapReleasePolls)
+                : new FileControllerSink(tempPath);
         timingSink.ReplayTo(fileSink);
         fileSink.Dispose();
         var bytes = File.ReadAllBytes(tempPath);
@@ -1780,6 +1789,7 @@ public partial class MainWindow : Window
         ThemeDarkMenuItem.IsChecked = _currentSettings.SelectedThemeIndex == 2;
 
         EnableExperimentalMenuItem.IsChecked = _currentSettings.EnableExperimentalFeatures;
+        HidPollTapTimingMenuItem.IsChecked = _currentSettings.UseHidPollTapTiming;
         CheckForUpdatesCheckBox.IsChecked = _currentSettings.CheckForUpdatesOnStart;
 
         // Restore the drawing options. _loadingSettings suppresses the change handlers so
@@ -1868,6 +1878,36 @@ public partial class MainWindow : Window
             );
         }
         _currentSettings.EnableExperimentalFeatures = EnableExperimentalMenuItem.IsChecked;
+        SaveSettings();
+    }
+
+    /// <summary>
+    /// Switches tap timing between milliseconds and host polls. This changes the <c>.tdld</c>
+    /// format, so the warning is not decoration: an ESP32 board handed a v4 file rejects it and
+    /// sits there flashing its error pattern. Only the RP firmware shipped with this release reads
+    /// both versions.
+    /// </summary>
+    private void HidPollTapTimingMenuItem_Click(object? sender, RoutedEventArgs e)
+    {
+        if (HidPollTapTimingMenuItem.IsChecked)
+        {
+            _ = ShowMessageAsync(
+                "Tap Timing: HID Polls",
+                "EXPERIMENTAL, and RP2040/RP2350 only.\n\n"
+                    + "Normally a tap is held for 25ms and released for 25ms, timed by the board — "
+                    + "which assumes the console polled the controller during that window. A console "
+                    + "busy rendering may not have, and every tap it misses shifts the rest of the "
+                    + "drawing by one cell. This mode instead holds each tap until the console has "
+                    + "actually asked for the report a set number of times, so a tap cannot pass "
+                    + "unobserved.\n\n"
+                    + "It has never been verified against a real Switch, by this project or by "
+                    + "upstream, who shelved the idea because it draws more slowly. Treat it as an "
+                    + "experiment to run against a desync, not as a setting to leave on.\n\n"
+                    + "This writes a different file format (v4). An ESP32 board will refuse it and "
+                    + "flash its error pattern — flash a board with this release's RP firmware first."
+            );
+        }
+        _currentSettings.UseHidPollTapTiming = HidPollTapTimingMenuItem.IsChecked;
         SaveSettings();
     }
 

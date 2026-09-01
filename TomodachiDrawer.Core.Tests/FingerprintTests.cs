@@ -69,10 +69,30 @@ namespace TomodachiDrawer.Core.Tests
                 prop.SetValue(target, "Median");
                 return true;
             }
+            if (t == typeof(ushort))
+            {
+                prop.SetValue(target, (ushort)((ushort)prop.GetValue(target)! + 7));
+                return true;
+            }
             if (t == typeof(QuantizerSettings))
             {
                 prop.SetValue(target, new QuantizerSettings("CieLab", 64, true));
                 return true;
+            }
+            // Enums last, and by value rather than by name: any enum with a second member can be
+            // perturbed without this test having to learn each new one.
+            if (t.IsEnum)
+            {
+                var values = Enum.GetValues(t);
+                foreach (var candidate in values)
+                {
+                    if (!Equals(candidate, prop.GetValue(target)))
+                    {
+                        prop.SetValue(target, candidate);
+                        return true;
+                    }
+                }
+                return false; // single-member enum: nothing to perturb, so say so loudly
             }
             return false;
         }

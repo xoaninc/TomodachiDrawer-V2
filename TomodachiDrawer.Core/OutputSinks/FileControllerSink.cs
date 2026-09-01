@@ -41,13 +41,57 @@ namespace TomodachiDrawer.Core.OutputSinks
         private int _pendingRepeats;
         private const int MaxRleCount = 0xFFF; // 4095. Have to flsuh. This should realistically never be hit.
 
+        /// <summary>
+        /// Taps carry their own timing: hold 25ms, release 25ms, measured by the firmware's own
+        /// clock. Header is 6 bytes. This is what every board in the field speaks.
+        /// </summary>
+        public const byte VersionMillisecondTaps = 3;
+
+        /// <summary>
+        /// Taps are measured in <b>host polls</b> instead of milliseconds — the firmware holds the
+        /// button until the console has actually asked for the report N times. Header grows to 16
+        /// bytes to carry the two counts.
+        /// <para>
+        /// The point is desync: a 25ms sleep assumes the console polled during it, and a console
+        /// busy rendering may not have. Dropped taps accumulate and the drawing shifts. Ported from
+        /// upstream's shelved <c>experimental-hid-tweaks</c> branch (<c>ca2f156</c>), byte-compatible
+        /// with it on purpose so the two can be compared directly.
+        /// </para>
+        /// <para>
+        /// <b>RP2040/RP2350 only.</b> The ESP32 firmware rejects any version it does not know and
+        /// flashes its error pattern, which is the correct failure — but it means a v4 file must
+        /// never be handed to an ESP32 board.
+        /// </para>
+        /// </summary>
+        public const byte VersionPollTaps = 4;
+
+        /// <summary>Writes a v3 file: tap timing in milliseconds, 6-byte header.</summary>
         public FileControllerSink(string filePath)
         {
             _writer = new BinaryWriter(File.Open(filePath, FileMode.Create));
 
             _writer.Write(Encoding.ASCII.GetBytes("TDLD")); // magic, because why not
-            _writer.Write((byte)3); // version
+            _writer.Write(VersionMillisecondTaps);
             _writer.Write((byte)0); // padding, keeps header 6 bytes
+        }
+
+        /// <summary>
+        /// Writes a v4 file: tap timing in host polls, 16-byte header.
+        /// <para>
+        /// Layout matches upstream's experiment exactly — magic at 0..3, version at 4, hold count
+        /// little-endian at 5..6, release count at 7..8, then padding out to 16. The padding is
+        /// upstream's; it buys alignment for whatever the header needs next.
+        /// </para>
+        /// </summary>
+        public FileControllerSink(string filePath, ushort tapHoldPolls, ushort tapReleasePolls)
+        {
+            _writer = new BinaryWriter(File.Open(filePath, FileMode.Create));
+
+            _writer.Write(Encoding.ASCII.GetBytes("TDLD"));
+            _writer.Write(VersionPollTaps);
+            _writer.Write(tapHoldPolls);
+            _writer.Write(tapReleasePolls);
+            _writer.Write(new byte[7]); // padding out to a 16-byte header
         }
 
         public void Press(Button btn) => WriteNibbleRecord(Opcode.PressButton, (byte)btn);

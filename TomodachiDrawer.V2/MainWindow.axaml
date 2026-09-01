@@ -71,6 +71,12 @@
           ToggleType="CheckBox"
           Click="EnableExperimentalMenuItem_Click"
         />
+        <MenuItem
+          x:Name="HidPollTapTimingMenuItem"
+          Header="Time Taps in _HID Polls (RP2040/RP2350 only)"
+          ToggleType="CheckBox"
+          Click="HidPollTapTimingMenuItem_Click"
+        />
       </MenuItem>
       <MenuItem Header="_Templates" x:Name="MenuTemplates">
         <!-- Inserted at runtime -->

@@ -40,6 +40,13 @@ internal class AppSettings
     public int EarlyTspExitSolutionsDistance { get; set; } = 10;
 
     /// <summary>
+    /// Time taps in host polls rather than milliseconds. Off by default and RP2040/RP2350 only —
+    /// see <see cref="TomodachiDrawer.Core.Models.TapTimingMode"/>. An ESP32 board refuses the
+    /// file this produces.
+    /// </summary>
+    public bool UseHidPollTapTiming { get; set; } = false;
+
+    /// <summary>
     /// Where <c>settings.json</c> lives: always under the per-user application-data folder, never
     /// next to the executable. The install directory is frequently read-only (Program Files, a
     /// macOS <c>.app</c> bundle, a read-only mount), and the process working directory is whatever

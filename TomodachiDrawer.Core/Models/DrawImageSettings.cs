@@ -31,5 +31,20 @@ namespace TomodachiDrawer.Core.Models
         public double EarlyTspExitRateCoefficient { get; set; } = 0.05;
 
         public int EarlyTspExitSolutionsDistance { get; set; } = 10;
+
+        /// <summary>
+        /// Whether taps are timed in milliseconds or in host polls. See <see cref="TapTimingMode"/>
+        /// — <c>HidPolls</c> is experimental and RP2040/RP2350 only.
+        /// </summary>
+        public TapTimingMode TapTiming { get; set; } = TapTimingMode.Milliseconds;
+
+        /// <summary>
+        /// Host polls a tap is held for under <see cref="TapTimingMode.HidPolls"/>. Upstream's
+        /// default, credited in their firmware comment to "wigreal's findings".
+        /// </summary>
+        public ushort TapHoldPolls { get; set; } = 22;
+
+        /// <summary>Host polls a tap stays released for under <see cref="TapTimingMode.HidPolls"/>.</summary>
+        public ushort TapReleasePolls { get; set; } = 3;
     }
 }

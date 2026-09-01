@@ -66,7 +66,13 @@ namespace TomodachiDrawer.Core
                 + $"|rev={settings.ReverseColourOrder}"
                 + $"|ee={settings.EarlyTspExitEnabled}"
                 + $"|eerc={settings.EarlyTspExitRateCoefficient}"
-                + $"|eesd={settings.EarlyTspExitSolutionsDistance}";
+                + $"|eesd={settings.EarlyTspExitSolutionsDistance}"
+                // Tap timing does not change the ROUTE, but it changes the bytes the cache holds:
+                // the header version and the tap opcodes' meaning both move with it. Leave it out
+                // and toggling the setting hands the hardware a stale .tdld with the wrong header.
+                + $"|tap={settings.TapTiming}"
+                + $"|tph={settings.TapHoldPolls}"
+                + $"|tpr={settings.TapReleasePolls}";
         }
     }
 }

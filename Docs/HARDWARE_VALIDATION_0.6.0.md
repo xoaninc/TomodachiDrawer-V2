@@ -1,6 +1,6 @@
 # Hardware validation — 0.6.0 candidate
 
-Use the downloaded **0.6.0-rc.1** pre-release. Its offline comparison report is separate from
+Use the downloaded **0.6.0-rc.2** pre-release. Its offline comparison report is separate from
 this checklist: exact rendered pixels do not verify game-menu coordinates or controller input
 delivery on a Switch.
 
@@ -55,7 +55,9 @@ cause. A desync in both modes likewise does not exclude lost inputs. Save both l
 
 ## 4. Application and board connection
 
-Cancel while the computer is calculating, then immediately generate again. The cancelled run
+Cancel while the computer is calculating, then generate again once the controls recover.
+Cancellation waits for active native TSP solves to finish; a large solver budget can make this
+wait visible. The label should become `cancelled`, and no partial route should be exported. The cancelled run
 must not become a reusable cached drawing. Reconnect the board and confirm detection still
 works. Change the bucket checkbox and verify that an old cached drawing is not exported.
 

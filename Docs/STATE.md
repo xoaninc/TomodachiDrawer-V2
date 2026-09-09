@@ -1,8 +1,8 @@
 # Current work — 2026-09-10
 
-**0.6.0-rc.2 has passed local acceptance and awaits CI/publication.**
-It is a pre-release for Juan's Switch test; 0.5.0 remains the latest stable release.
-Do not mark it published until the GitHub release and its five assets have been verified.
+**[0.6.0-rc.2 is published](https://github.com/xoaninc/TomodachiDrawer-V2/releases/tag/0.6.0-rc.2), downloaded and GUI-tested.**
+Tag `4dc8d9b` and main CI passed; the release has five assets and is a pre-release for Juan's
+Switch test. GitHub latest stable remains 0.5.0. The app is closed and preferences restored.
 
 ## Verified
 
@@ -19,8 +19,12 @@ Do not mark it published until the GitHub release and its five assets have been 
   the earlier full-suite result predates UI-only follow-ups. CI reruns Debug/Release tests.
 - GUI startup, change/save and restart preserve bucket/HID flags, colour limit and Switch None.
   The initial settings-overwrite bug is fixed. The app is closed; user preferences restored.
-- Earlier local GUI cancellation followed by a fresh real-photo v3 export passed, with
-  357,932 decoded events. The downloaded GitHub bundle still needs its final export smoke test.
+- The actual GitHub macOS ARM64 download launches, cancels a real-photo solve, restores its
+  controls and `cancelled` label, then generates a fresh TSP-5 v3 export: 81,492 bytes and
+  352,712 strictly decoded events. Cancellation is cooperative: current native TSP solves
+  finish before controls recover (observed with a 30-second solver budget).
+- Download digest matches GitHub; Mach-O arm64, plist versions and all embedded/external
+  firmwares match. Evidence: `ci-release.json`, `release-package-rc2.json`, `release-gui-rc2.json`.
 - Local macOS arm64 bundle and all three embedded firmwares verified; firmware is unchanged
   from 0.5.0. No TDLD format change in this candidate.
 
@@ -45,9 +49,17 @@ SOURCE_DATE_EPOCH, preserving the shipped binaries and all drawing code. The fai
 retained rather than rewritten. Local final-UI HID v4 export passed strict decoding (3,270
 events, 22/3 polls). The app is closed and original preferences restored.
 
-Next: push/tag 0.6.0-rc.2; wait for that exact commit's CI,
-verify pre-release status and five assets while preserving latest stable 0.5.0; download the
-actual macOS asset to Downloads, smoke-test it and close it. Hardware is Juan's later gate.
+GitHub [tag CI](https://github.com/xoaninc/TomodachiDrawer-V2/actions/runs/34410929589)
+and [main CI](https://github.com/xoaninc/TomodachiDrawer-V2/actions/runs/34410929598) passed
+on `4dc8d9b6fb4b91d782af3c01dd6e2e91949cbd12`: 222 C# tests, 14 harness guards,
+28 ESP32 checks and both RP byte comparisons. Release published 2026-09-09 22:16 UTC.
+
+Local download: `~/Downloads/TomodachiDrawer-V2-0.6.0-rc.2/TomodachiDrawer V2.app`,
+with its original archive, two UF2 files and Spanish README alongside it.
+Archive SHA256: `77c33ad8a7f220c548faf61e95a4c91ace75a1d8781ead248bf8fc6f9b7b9949`.
+
+Next is Juan's hardware checklist. No further implementation or offline matrix is scheduled
+for this candidate; the extended matrix and upstream 0.9.4 remain deferred.
 
 ---
 

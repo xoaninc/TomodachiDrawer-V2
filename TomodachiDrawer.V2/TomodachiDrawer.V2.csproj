@@ -7,7 +7,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <VersionPrefix>0.6.0</VersionPrefix>
-    <VersionSuffix>rc.1</VersionSuffix>
+    <VersionSuffix>rc.2</VersionSuffix>
     <!-- Ship as "TomodachiDrawer V2". The OS process / exe is the (space-free) assembly name
          TomodachiDrawerV2 (a space would be an invalid avares:// URI authority); the human-facing
          product/title carries the space. -->

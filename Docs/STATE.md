@@ -1,6 +1,6 @@
 # Current work — 2026-09-10
 
-**0.6.0-rc.1 has passed local acceptance and is ready for the tag's CI/publication.**
+**0.6.0-rc.2 has passed local acceptance and awaits CI/publication.**
 It is a pre-release for Juan's Switch test; 0.5.0 remains the latest stable release.
 Do not mark it published until the GitHub release and its five assets have been verified.
 
@@ -39,7 +39,13 @@ Frozen sources/adapters and older/quarantined evidence remain under `/tmp/tdld-0
 GUI/package reports are under `/tmp/tdld-092-smoke`, including `settings-persistence-result.json`.
 The final local build is `/tmp/tdld-092-app-resumed/TomodachiDrawer V2.app`.
 
-Next: commit/push the reviewed changes and tag 0.6.0-rc.1; wait for that exact commit's CI,
+Tag rc.1 (`d1b17d1`) was blocked before publication: each freshly built RP UF2 differed
+by just one SDK `__DATE__` byte (September 1 versus 9). RC2 fixes the build date through
+SOURCE_DATE_EPOCH, preserving the shipped binaries and all drawing code. The failed tag is
+retained rather than rewritten. Local final-UI HID v4 export passed strict decoding (3,270
+events, 22/3 polls). The app is closed and original preferences restored.
+
+Next: push/tag 0.6.0-rc.2; wait for that exact commit's CI,
 verify pre-release status and five assets while preserving latest stable 0.5.0; download the
 actual macOS asset to Downloads, smoke-test it and close it. Hardware is Juan's later gate.
 

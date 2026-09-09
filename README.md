@@ -19,7 +19,7 @@ TomodachiDrawer is a collection of firmware and software that generates inputs t
 ## Hardware validation
 Desynchronization has been reported on both Switch generations; V2's long Switch 2 drawing
 also shifted after roughly two hours. Offline rendering can verify the planned image, but
-cannot establish that the game received every input. Version **0.6.0-rc.1** is a candidate for
+cannot establish that the game received every input. Version **0.6.0-rc.2** is a candidate for
 hardware testing with dynamic buckets off by default. Follow the
 [hardware checklist](Docs/HARDWARE_VALIDATION_0.6.0.md) and keep the log and final canvas photo.
 

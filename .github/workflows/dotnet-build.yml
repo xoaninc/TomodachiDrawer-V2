@@ -83,6 +83,9 @@ jobs:
       working-directory: TomodachiDrawer.Firmware
       env:
         PICO_SDK_PATH: ${{ github.workspace }}/pico-sdk
+        # Pico SDK 2.2.0 embeds __DATE__ in standard_binary_info.c. Preserve the date of
+        # the committed firmware (2026-09-01 UTC), independently of the CI run date.
+        SOURCE_DATE_EPOCH: '1788220800'
       run: |
         cmake -G Ninja -B build-${{ matrix.platform }} -DPICO_BOARD=${{ matrix.board }} -DPICO_PLATFORM=${{ matrix.platform }}
         cmake --build build-${{ matrix.platform }} --parallel
@@ -99,9 +102,9 @@ jobs:
     # first hunting down CI artifacts. Committed binaries go stale silently, so this makes that a
     # red build instead: the committed file must equal a fresh build of the source next to it.
     #
-    # This relies on the firmware build being reproducible, which it is - no __DATE__/__TIME__ and a
-    # fixed pico_set_program_version. If that ever stops holding, relax this to a size/section check
-    # rather than deleting it, otherwise the staleness trap comes straight back.
+    # SOURCE_DATE_EPOCH above fixes the SDK's embedded build date; the SDK and program version
+    # are also fixed. Keep the byte comparison strict: real source or toolchain changes must
+    # produce reviewed, rebuilt binaries instead of silently shipping an older firmware.
     - name: Committed firmware must match this build
       run: |
         built="TomodachiDrawer.Firmware/build-${{ matrix.platform }}/TomodachiDrawer.Firmware.${{ matrix.platform }}.uf2"

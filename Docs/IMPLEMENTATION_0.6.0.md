@@ -1,6 +1,6 @@
 # 0.6.0 candidate: upstream buckets and parallel routing
 
-Approved 2026-09-08. Delivery is **0.6.0-rc.1**, a GitHub pre-release downloaded locally for
+Approved 2026-09-08. Delivery is **0.6.0-rc.2** (rc.1 was blocked before publication by the SDK build date), a GitHub pre-release downloaded locally for
 Juan's Switch test. A stable release requires the subsequent hardware result.
 
 ## Locked decisions

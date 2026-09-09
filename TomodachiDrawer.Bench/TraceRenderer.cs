@@ -54,7 +54,14 @@ namespace TomodachiDrawer.Bench
         /// </summary>
         public int DistinctColours => _coloursUsed.Count;
 
-        public void EraseAll() => Array.Fill(_cells, Unpainted);
+        public int EraseAllCount { get; private set; }
+        public int BucketFills { get; private set; }
+
+        public void EraseAll()
+        {
+            EraseAllCount++;
+            Array.Fill(_cells, Unpainted);
+        }
 
         public void Stamp(SKColor colour, int brushSize, int x, int y)
         {
@@ -69,8 +76,10 @@ namespace TomodachiDrawer.Bench
         public void BucketFill(SKColor colour, int x, int y)
         {
             if (!InBounds(x, y))
-                return;
-
+                throw new InvalidOperationException(
+                    $"Bucket seed outside image: ({x},{y}) in {_width}x{_height}"
+                );
+            BucketFills++;
             var target = _cells[Index(x, y)];
             if (target == colour)
                 return;
@@ -100,7 +109,9 @@ namespace TomodachiDrawer.Bench
             _coloursUsed.Add((uint)colour);
 
             if (!InBounds(x, y))
-                return; // the drawer clamps stamps away from the edges; be forgiving anyway
+                throw new InvalidOperationException(
+                    $"Paint outside image: ({x},{y}) in {_width}x{_height}"
+                );
             int i = Index(x, y);
             if (_cells[i] != Unpainted)
                 Overdraws++;
@@ -128,6 +139,11 @@ namespace TomodachiDrawer.Bench
         /// </summary>
         public DrawComparison CompareTo(SKBitmap expected)
         {
+            if (expected.Width != _width || expected.Height != _height)
+                throw new ArgumentException(
+                    "Reference dimensions differ from rendered canvas.",
+                    nameof(expected)
+                );
             var expectedPixels = expected.Pixels;
             int total = 0,
                 matched = 0,

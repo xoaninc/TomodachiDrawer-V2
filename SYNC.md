@@ -35,16 +35,21 @@ namespace has been polluted again.
 
 ## Last synced
 
-- **Through:** `upstream/master @ 8720417` ("CSharpier format pass", one commit past
-  upstream tag **0.8.3** = `a50213c`, i.e. `upstream-tags/0.8.3`)
+The 0.6.0 candidate ports upstream 0.9.2's bucket timings, candidate cost comparison,
+shared-border reuse and layer ordering while retaining V2's parallel solver. The September 9
+validation scope was reduced at Juan's request; see `Docs/IMPLEMENTATION_0.6.0.md`.
+
+- **Through:** upstream **0.9.2**, `f3bc3895f1679e1b0e2efda21274a5ee6dd40ddb`.
 - **Fork point:** upstream `d5f64bc` (merge of PR #38, virtual-gamepad-sink) =
   our pre-V2 baseline.
-- **Date:** 2026-07-29
-- **Previous marker:** `6ce4683` (upstream tag 0.6.0), 2026-05-26 — 122 commits ago.
-- Upstream has already moved past this marker (dependabot bumps). Nothing behavioural, but
-  re-diff before assuming this list is still current.
+- **Date:** 2026-09-09.
+- **Previous marker:** `8720417`, one commit past upstream 0.8.3. The intervening 0.8.4
+  dependency changes were already adopted on September 1.
+- **Newer upstream reviewed but deferred:** 0.9.4, published September 9. Its geometry,
+  toolbar and memory optimizations are outside this frozen candidate; see the dated audit.
 
-Full analysis of this sync: [`Docs/UPSTREAM_SYNC_AUDIT.md`](./Docs/UPSTREAM_SYNC_AUDIT.md).
+Current port decisions: [`Docs/UPSTREAM_0.9.2_AUDIT.md`](./Docs/UPSTREAM_0.9.2_AUDIT.md).
+Historical 0.6.0–0.8.3 analysis: [`Docs/UPSTREAM_SYNC_AUDIT.md`](./Docs/UPSTREAM_SYNC_AUDIT.md).
 
 ### Re-checks since the marker
 

@@ -68,6 +68,7 @@
         <MenuItem
           x:Name="EnableExperimentalMenuItem"
           Header="_Enable Experimental Features"
+          IsEnabled="False"
           ToggleType="CheckBox"
           Click="EnableExperimentalMenuItem_Click"
         />
@@ -210,6 +211,12 @@
                 <TextBlock Text="seconds" VerticalAlignment="Center" />
                 <Button Content="?" Width="28" Click="TSPHelpButton_Click" />
               </StackPanel>
+              <CheckBox
+                x:Name="EnableBucketFills"
+                Content="Enable Bucket Fills"
+                ToolTip.Tip="Draws outlines and fills them when that layer is estimated to be faster. Comparing alternatives takes longer to generate. Off by default while the new bucket behavior is being tested on Switch."
+                IsCheckedChanged="EnableBucketFills_IsCheckedChanged"
+              />
               <CheckBox
                 x:Name="EnableHomeCanvas"
                 Content="Auto Home Canvas To Top Left"

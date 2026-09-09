@@ -16,6 +16,18 @@ namespace TomodachiDrawer.Bench
         public static IReadOnlyList<(string Name, SKBitmap Bitmap)> All() =>
             [("grid64", Grid64()), ("rings128", Rings128()), ("mosaic256", Mosaic256())];
 
+        /// <summary>Solver-free observer parity fixtures, excluded from performance defaults.</summary>
+        public static IReadOnlyList<(string Name, SKBitmap Bitmap)> ObserverFixtures()
+        {
+            var sparse = new SKBitmap(16, 16);
+            sparse.Erase(SKColors.Transparent);
+            for (int i = 0; i < 12; i++)
+                sparse.SetPixel(2 + i, 2 + (i % 3), SKColors.Red);
+            var solid = new SKBitmap(256, 256);
+            solid.Erase(SKColors.Blue);
+            return [("observer-sparse12", sparse), ("observer-solid256", solid)];
+        }
+
         /// <summary>64x64, chunky blocks with a transparent border — exercises stamps plus the
         /// transparent (non-bucket-fill) path.</summary>
         private static SKBitmap Grid64()

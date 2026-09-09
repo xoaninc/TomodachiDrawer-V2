@@ -1,4 +1,4 @@
-﻿using TomodachiDrawer.Core.ImageProcessing.Quantizers;
+using TomodachiDrawer.Core.ImageProcessing.Quantizers;
 
 namespace TomodachiDrawer.Core.Models
 {
@@ -15,6 +15,11 @@ namespace TomodachiDrawer.Core.Models
 
         /// <summary>Enables stuff that may be prone to desyncs or other instabilities.</summary>
         public bool EnableExperimentalFeatures { get; set; } = false;
+
+        /// <summary>Compare complete routes with and without bucket fills. Opt-in.</summary>
+        public bool EnableBucketFills { get; set; } = false;
+
+        public int MinBucketZoneSize { get; set; } = 36;
 
         public bool HomeToTopLeft { get; set; } = false;
 

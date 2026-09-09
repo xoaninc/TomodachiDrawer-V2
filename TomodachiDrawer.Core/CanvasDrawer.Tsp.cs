@@ -21,9 +21,7 @@ namespace TomodachiDrawer.Core
 
         // Early-exit (improvement limit) tuning, ported from upstream. Off by default: upstream's
         // author reports the values are unintuitive and did not ship them enabled either.
-        private bool _earlyExitEnabled;
-        private double _earlyExitRateCoefficient = 0.05;
-        private int _earlyExitSolutionsDistance = 10;
+        private SolverOptions _solverOptions = new(false, 0.05, 10);
 
         public static float GetRecommendedTSPSolveTime(int width, int height)
         {
@@ -294,51 +292,30 @@ namespace TomodachiDrawer.Core
 
             int closestPointIndex = NearestIndexToCursor(points);
 
-            using var manager = new RoutingIndexManager(points.Length, 1, closestPointIndex);
-            using var routing = new RoutingModel(manager);
-
-            int transitCallbackIndex = routing.RegisterTransitCallback(
-                (fromIndex, toIndex) =>
-                {
-                    var fromNode = manager.IndexToNode(fromIndex);
-                    var toNode = manager.IndexToNode(toIndex);
-                    // Upstream's note here read: "during testing I made a change trying to
-                    // incentivize adjacent things since it can just hold A during... but the lowest
-                    // value this can return is 1 so there was no gain, it was already trying to do
-                    // that lol." That names the trap and then walks into it — with integer costs an
-                    // adjacent arc cannot be *discounted* below 1, so a discount is inexpressible.
-                    // Penalising the non-adjacent arc instead expresses the same preference, which
-                    // is what MoveCost does.
-                    return MoveCost(points[fromNode], points[toNode], holdsAAcrossAdjacent);
-                }
-            );
-
-            routing.SetArcCostEvaluatorOfAllVehicles(transitCallbackIndex);
-
-            // Single source of truth for the solver configuration, shared with RouteSolver so the
-            // parallel path cannot silently drift from this one.
-            var searchParameters = RouteSolver.BuildSearchParameters(
-                timeLimitSeconds,
-                _earlyExitEnabled,
-                _earlyExitRateCoefficient,
-                _earlyExitSolutionsDistance
-            );
-
-            var sw = Stopwatch.StartNew();
-            var solution = routing.SolveWithParameters(searchParameters);
-            sw.Stop();
-            solveMs = sw.Elapsed.TotalMilliseconds;
-
-            if (solution is null)
-                return null;
-
-            var optimizedRoute = new List<CanvasPoint>(points.Length);
-            long index = routing.Start(0);
-            while (routing.IsEnd(index) == false)
+            List<CanvasPoint> optimizedRoute;
+            try
             {
-                optimizedRoute.Add(points[manager.IndexToNode(index)]);
-                index = solution.Value(routing.NextVar(index));
+                optimizedRoute = RouteSolver.Solve(
+                    inputPoints,
+                    timeLimitSeconds,
+                    out solveMs,
+                    _solverOptions,
+                    holdsAAcrossAdjacent,
+                    closestPointIndex,
+                    SolverParametersObserver
+                );
             }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception error)
+            {
+                _log($"TSP failed; using a complete fallback route: {error.Message}");
+                return null;
+            }
+            if (optimizedRoute.Count == 0)
+                return null;
 
             // OrTools writes the cycle out starting at the depot, which drops the arc from the last
             // node back to it. That is one of n possible cuts, chosen for us by where the depot

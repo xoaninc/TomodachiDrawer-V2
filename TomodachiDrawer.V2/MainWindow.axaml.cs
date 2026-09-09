@@ -35,6 +35,8 @@ public partial class MainWindow : Window
     private readonly CancellationTokenSource _cts = new();
 
     private bool BusyExporting = false;
+    private bool _rp2040Connected;
+    private bool _rp2350Connected;
 
     /// <summary>
     /// Cancels the in-progress route generation. Separate from <c>_cts</c> on purpose: that one is
@@ -286,7 +288,6 @@ public partial class MainWindow : Window
 
             using var responseJsonObject = JsonDocument.Parse(responseStream);
 
-            // 0.0.0 format, no v, no -.
             var releaseVersionTag =
                 responseJsonObject.RootElement.GetProperty("tag_name").GetString() ?? "0.0.0";
 
@@ -296,27 +297,19 @@ public partial class MainWindow : Window
             // 0.5.0 could be updated to 0.4.1.
             if (releaseVersionTag != null)
             {
-                // Both TryParse calls run unconditionally: with && the second is skipped when the
-                // first fails, leaving `ours` unassigned.
-                bool haveLatest = Version.TryParse(
-                    releaseVersionTag.TrimStart('v', 'V'),
-                    out var latest
-                );
-                bool haveOurs = Version.TryParse(ourVersion.TrimStart('v', 'V'), out var ours);
-                bool parsed = haveLatest && haveOurs;
-
-                if (parsed && latest <= ours)
+                if (!ReleaseVersion.TryCompare(releaseVersionTag, ourVersion, out int comparison))
                 {
                     AppendLog(
-                        latest == ours
+                        $"Cannot compare release versions {releaseVersionTag} and {ourVersion}; skipping update prompt."
+                    );
+                }
+                else if (comparison <= 0)
+                {
+                    AppendLog(
+                        comparison == 0
                             ? $"Up to date! {ourVersion}"
                             : $"Running {ourVersion}, ahead of the latest release ({releaseVersionTag}). No update needed."
                     );
-                }
-                else if (!parsed && releaseVersionTag == ourVersion)
-                {
-                    // Unparseable but identical: still clearly not an update.
-                    AppendLog($"Up to date! {ourVersion}");
                 }
                 else
                 {
@@ -342,6 +335,11 @@ public partial class MainWindow : Window
     protected override void OnClosed(System.EventArgs e)
     {
         _cts.Cancel();
+        var preview = PreviewImage.Source as IDisposable;
+        PreviewImage.Source = null;
+        preview?.Dispose();
+        _currentImage?.Dispose();
+        _currentImage = null;
         base.OnClosed(e);
     }
 
@@ -477,6 +475,11 @@ public partial class MainWindow : Window
                     "RP2040"
                 );
 
+        if (chip == RPChipType.RP2350)
+            _rp2350Connected = path != null;
+        else
+            _rp2040Connected = path != null;
+
         // Export-to-.UF2 only needs an image — no device required.
         exportUf2Button.IsEnabled = hasImage && !BusyExporting;
 
@@ -605,6 +608,9 @@ public partial class MainWindow : Window
 
     private async void FlashEsp32FirmwareButton_Click(object? sender, RoutedEventArgs e)
     {
+        if (BusyExporting)
+            return;
+
         if (ESP32PortComboBox.SelectedItem is not string port)
         {
             _ = ShowMessageAsync(
@@ -623,33 +629,34 @@ public partial class MainWindow : Window
             );
             return;
         }
-        var bytes = File.ReadAllBytes(firmwarePath);
+        if (!TryBeginGeneration(out _, cancellable: false))
+            return;
 
-        BusyExporting = true;
-        FlashEsp32FirmwareButton.IsEnabled = false;
-        ExportEsp32Button.IsEnabled = false;
         AppendLog($"Flashing ESP32-S3 base firmware via {port} ...");
 
         string? error = null;
         bool cancelled = false;
-        await Task.Run(async () =>
+        try
         {
-            try
+            await Task.Run(async () =>
             {
+                var bytes = File.ReadAllBytes(firmwarePath);
                 await EspFlasher.FlashBaseFirmwareAsync(port, bytes, null, _cts.Token, AppendLog);
-            }
-            catch (OperationCanceledException)
-            {
-                cancelled = true;
-            }
-            catch (Exception ex)
-            {
-                error = ex.Message;
-            }
-        });
+            });
+        }
+        catch (OperationCanceledException)
+        {
+            cancelled = true;
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            EndGeneration();
+        }
 
-        BusyExporting = false;
-        EndGeneration();
         if (cancelled)
         {
             AppendLog("Generation cancelled.");
@@ -677,6 +684,9 @@ public partial class MainWindow : Window
 
     private async void ExportEsp32Button_Click(object? sender, RoutedEventArgs e)
     {
+        if (BusyExporting)
+            return;
+
         if (_currentImage == null)
             return;
 
@@ -698,7 +708,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var imageSnapshot = _currentImage!.Copy();
+        using var imageSnapshot = _currentImage!.Copy();
         var drawSettings = GetDrawImageSettings();
 
         // Poll-timed taps are a v4 file, and the ESP32 firmware only speaks v3 — it would refuse
@@ -716,44 +726,40 @@ public partial class MainWindow : Window
             );
         }
 
-        var token = BeginGeneration();
+        var switchVersion = _currentSettings.SelectedSwitchVersion;
+        if (!TryBeginGeneration(out var token))
+            return;
 
-        BusyExporting = true;
-        ExportEsp32Button.IsEnabled = false;
         TimeSpan totalTime = TimeSpan.MaxValue;
         string? error = null;
         bool cancelled = false;
 
-        await Task.Run(async () =>
+        try
         {
-            try
+            await Task.Run(async () =>
             {
-                using var img = imageSnapshot;
-                var (tdldBytes, time) = await GetTdldAsync(
-                    img,
-                    drawSettings,
-                    _currentSettings.SelectedSwitchVersion,
-                    token
-                );
+                var img = imageSnapshot;
+                var (tdldBytes, time) = await GetTdldAsync(img, drawSettings, switchVersion, token);
                 totalTime = time;
+                await BeginEsp32FlashAsync(token);
                 AppendLog(
                     $"Flashing {tdldBytes.Length} bytes to the ESP32-S3 tdld partition via {port} ..."
                 );
                 await EspFlasher.FlashTdldAsync(port, tdldBytes, null, _cts.Token, AppendLog);
-            }
-            catch (OperationCanceledException)
-            {
-                cancelled = true;
-            }
-            catch (Exception ex)
-            {
-                error = ex.Message;
-            }
-        });
-
-        BusyExporting = false;
-        EndGeneration();
-        ExportEsp32Button.IsEnabled = true;
+            });
+        }
+        catch (OperationCanceledException)
+        {
+            cancelled = true;
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            EndGeneration();
+        }
 
         if (cancelled)
         {
@@ -824,8 +830,7 @@ public partial class MainWindow : Window
         _currentImagePath = displayName; // kept for log messages / ImagePathBox
 
         ImagePathBox.Text = displayName;
-        RP2040ExportUF2Button.IsEnabled = true;
-        RP2350ExportUF2Button.IsEnabled = true;
+        RefreshOperationButtons();
 
         if (img.Width == 256 && img.Height == 256)
         {
@@ -861,9 +866,11 @@ public partial class MainWindow : Window
         }
 
         var quantizerSettings = GetQuantizerSettings();
-        var preview = GetPreview();
+        using var preview = GetPreview();
 
+        var previousPreview = PreviewImage.Source as IDisposable;
         PreviewImage.Source = ToAvaloniaBitmap(preview);
+        previousPreview?.Dispose();
         // Size in the header, purely so the user can sanity-check what got loaded/resized.
         PreviewHeader.Text = $"Preview ({_currentImage.Width}x{_currentImage.Height})";
         AppendLog(
@@ -929,6 +936,18 @@ public partial class MainWindow : Window
         string? linkButtonText = null
     )
     {
+        if (_cts.IsCancellationRequested)
+            return;
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            // The Func<Task> overload awaits the complete dialog, including user dismissal.
+            // RP export/retry calls this from Task.Run; controls must be created on the UI thread.
+            await Dispatcher.UIThread.InvokeAsync(() =>
+                ShowMessageAsync(title, message, link, linkButtonText)
+            );
+            return;
+        }
+
         var buttonRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -1047,6 +1066,9 @@ public partial class MainWindow : Window
 
     private async void ExportToDeviceButton_Click(object? sender, RoutedEventArgs e)
     {
+        if (BusyExporting)
+            return;
+
         if (_currentImage == null)
             return;
 
@@ -1062,14 +1084,13 @@ public partial class MainWindow : Window
         }
 
         var chip = sender == RP2350ExportButton ? RPChipType.RP2350 : RPChipType.RP2040;
-        var exportButton = chip == RPChipType.RP2350 ? RP2350ExportButton : RP2040ExportButton;
 
-        var imageSnapshot = _currentImage!.Copy();
+        using var imageSnapshot = _currentImage!.Copy();
         var drawSettings = GetDrawImageSettings();
-        var token = BeginGeneration();
+        var switchVersion = _currentSettings.SelectedSwitchVersion;
+        if (!TryBeginGeneration(out var token))
+            return;
 
-        BusyExporting = true;
-        exportButton.IsEnabled = false;
         TimeSpan totalTime = TimeSpan.MaxValue;
 
         // try/finally so a failure during generation/flash never leaves BusyExporting stuck true
@@ -1078,14 +1099,10 @@ public partial class MainWindow : Window
         {
             await Task.Run(async () =>
             {
-                using var img = imageSnapshot;
-                var (tdldBytes, time) = await GetTdldAsync(
-                    img,
-                    drawSettings,
-                    _currentSettings.SelectedSwitchVersion,
-                    token
-                );
+                var img = imageSnapshot;
+                var (tdldBytes, time) = await GetTdldAsync(img, drawSettings, switchVersion, token);
                 totalTime = time;
+                token.ThrowIfCancellationRequested();
 
                 var uf2Bytes = UF2Flasher.BuildTDLDUF2(tdldBytes, chip);
                 var drivePath = UF2Flasher.FindDriveForChip(chip);
@@ -1121,7 +1138,7 @@ public partial class MainWindow : Window
                 }
                 else
                 {
-                    await WriteUf2WithRetryAsync(drivePath, driveName, uf2Bytes, chip);
+                    await WriteUf2WithRetryAsync(drivePath, driveName, uf2Bytes, chip, token);
                 }
             });
         }
@@ -1135,12 +1152,11 @@ public partial class MainWindow : Window
         }
         finally
         {
-            BusyExporting = false;
             EndGeneration();
-            exportButton.IsEnabled = true;
         }
 
-        SetEstimate(totalTime);
+        if (!token.IsCancellationRequested && totalTime != TimeSpan.MaxValue)
+            SetEstimate(totalTime);
     }
 
     private DrawImageSettings GetDrawImageSettings()
@@ -1158,6 +1174,7 @@ public partial class MainWindow : Window
             TSPTimeLimit = tspLimit,
             DisableLargeBrush = false,
             EnableExperimentalFeatures = enableExperimental,
+            EnableBucketFills = EnableBucketFills.IsChecked ?? false,
             HomeToTopLeft = enableHome,
             ReverseColourOrder = ReverseColourOrderCheckBox.IsChecked ?? false,
             EarlyTspExitEnabled = _currentSettings.EarlyTspExitEnabled,
@@ -1170,27 +1187,75 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Starts a cancellable generation and enables the Cancel button. Any previous source is
-    /// disposed — generations are serialised by BusyExporting, so there is never more than one.
+    /// Acquires the single operation slot on the UI thread. Polling only refreshes device status;
+    /// it must never be relied on to exclude simultaneous generations or firmware writes.
     /// </summary>
-    private CancellationToken BeginGeneration()
+    private bool TryBeginGeneration(out CancellationToken token, bool cancellable = true)
     {
-        _generationCts?.Dispose();
-        _generationCts = new CancellationTokenSource();
-        CancelDrawButton.IsEnabled = true;
-        return _generationCts.Token;
+        Dispatcher.UIThread.VerifyAccess();
+        token = default;
+        if (BusyExporting || _cts.IsCancellationRequested)
+            return false;
+
+        _generationCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
+        token = _generationCts.Token;
+        BusyExporting = true;
+        RefreshOperationButtons();
+        CancelDrawButton.IsEnabled = cancellable;
+        return true;
     }
 
     private void EndGeneration()
     {
+        Dispatcher.UIThread.VerifyAccess();
         CancelDrawButton.IsEnabled = false;
         _generationCts?.Dispose();
         _generationCts = null;
+        BusyExporting = false;
+        RefreshOperationButtons();
+    }
+
+    private void RefreshOperationButtons()
+    {
+        bool available = !BusyExporting && !_cts.IsCancellationRequested;
+        bool hasImage = _currentImage != null;
+        EstimateButton.IsEnabled = available && hasImage;
+        ExportTDLDButton.IsEnabled = available && hasImage;
+        RP2040ExportUF2Button.IsEnabled = available && hasImage;
+        RP2350ExportUF2Button.IsEnabled = available && hasImage;
+        RP2040FlashButton.IsEnabled = available && _rp2040Connected;
+        RP2350FlashButton.IsEnabled = available && _rp2350Connected;
+        RP2040ExportButton.IsEnabled = available && _rp2040Connected && hasImage;
+        RP2350ExportButton.IsEnabled = available && _rp2350Connected && hasImage;
+        bool esp32Selected = ESP32PortComboBox.SelectedItem is string;
+        FlashEsp32FirmwareButton.IsEnabled = available && esp32Selected;
+        ExportEsp32Button.IsEnabled = available && esp32Selected && hasImage;
+#if DEBUG
+        if (MenuDebugConnectVirtualGamepad != null)
+            MenuDebugConnectVirtualGamepad.IsEnabled = available;
+        if (MenuDebugRunInVirtualGamepad != null)
+            MenuDebugRunInVirtualGamepad.IsEnabled =
+                available && hasImage && _debugVirtualGamepad.IsConnected;
+        if (MenuDebugOpenVirtualGamepadController != null)
+            MenuDebugOpenVirtualGamepadController.IsEnabled =
+                available && _debugVirtualGamepad.IsConnected;
+#endif
+    }
+
+    private async Task BeginEsp32FlashAsync(CancellationToken token)
+    {
+        // This UI transition is ordered against Cancel clicks: cancellation either wins here,
+        // or the button is disabled before a flash governed by the window-lifetime token starts.
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            token.ThrowIfCancellationRequested();
+            CancelDrawButton.IsEnabled = false;
+        });
     }
 
     private void CancelDrawButton_Click(object? sender, RoutedEventArgs e)
     {
-        if (_generationCts is { IsCancellationRequested: false })
+        if (CancelDrawButton.IsEnabled && _generationCts is { IsCancellationRequested: false })
         {
             AppendLog("Cancelling route generation…");
             _generationCts.Cancel();
@@ -1206,6 +1271,9 @@ public partial class MainWindow : Window
     /// </summary>
     private async void ExportTDLDButton_Click(object? sender, RoutedEventArgs e)
     {
+        if (BusyExporting)
+            return;
+
         if (_currentImage == null)
             return;
 
@@ -1233,29 +1301,30 @@ public partial class MainWindow : Window
         );
 
         var outputPath = file?.TryGetLocalPath();
-        if (outputPath == null)
+        if (
+            outputPath == null
+            || BusyExporting
+            || _currentImage == null
+            || _currentSettings.SelectedSwitchVersion == SwitchVersion.None
+        )
             return;
 
-        var imageSnapshot = _currentImage!.Copy();
+        using var imageSnapshot = _currentImage!.Copy();
         var drawSettings = GetDrawImageSettings();
-        var token = BeginGeneration();
+        var switchVersion = _currentSettings.SelectedSwitchVersion;
+        if (!TryBeginGeneration(out var token))
+            return;
 
-        ExportTDLDButton.IsEnabled = false;
-        BusyExporting = true;
         TimeSpan totalTime = TimeSpan.MaxValue;
 
         try
         {
             await Task.Run(async () =>
             {
-                using var img = imageSnapshot;
-                var (tdldBytes, time) = await GetTdldAsync(
-                    img,
-                    drawSettings,
-                    _currentSettings.SelectedSwitchVersion,
-                    token
-                );
+                var img = imageSnapshot;
+                var (tdldBytes, time) = await GetTdldAsync(img, drawSettings, switchVersion, token);
                 totalTime = time;
+                token.ThrowIfCancellationRequested();
                 File.WriteAllBytes(outputPath, tdldBytes);
                 AppendLog($"Saved {tdldBytes.Length} bytes of .tdld to {outputPath}");
             });
@@ -1270,12 +1339,11 @@ public partial class MainWindow : Window
         }
         finally
         {
-            BusyExporting = false;
             EndGeneration();
-            ExportTDLDButton.IsEnabled = _currentImage != null;
         }
 
-        SetEstimate(totalTime);
+        if (!token.IsCancellationRequested && totalTime != TimeSpan.MaxValue)
+            SetEstimate(totalTime);
     }
 
     /// <summary>
@@ -1292,7 +1360,8 @@ public partial class MainWindow : Window
         string drivePath,
         string driveName,
         byte[] uf2Bytes,
-        RPChipType chip
+        RPChipType chip,
+        CancellationToken cancellationToken
     )
     {
         var target = Path.Combine(drivePath, "tdld_image.uf2");
@@ -1301,6 +1370,7 @@ public partial class MainWindow : Window
         {
             try
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 File.WriteAllBytes(target, uf2Bytes);
                 AppendLog(
                     $"Wrote to {chip} flash. Unplug the {chip} and plug it into the switch without holding any button."
@@ -1340,7 +1410,9 @@ public partial class MainWindow : Window
     private void SetEstimate(TimeSpan time)
     {
         var estimateStr = $"{time:h\\hm\\ms\\s}";
-        DrawTimeLabel.Text = $"Draw Time Estimate: {estimateStr}";
+        DrawTimeLabel.Text = _currentSettings.UseHidPollTapTiming
+            ? $"Draw Time Estimate: {estimateStr} (nominal; HID timing varies)"
+            : $"Draw Time Estimate: {estimateStr}";
     }
 
     // Moved to Core (RouteFingerprint) so the "does every setting invalidate the cache?" property
@@ -1361,11 +1433,13 @@ public partial class MainWindow : Window
         CancellationToken cancellationToken = default
     )
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var fingerprint = ComputeFingerprint(img, settings, ver);
         lock (_cacheLock)
         {
             if (fingerprint == _cachedFingerprint && _cachedTdld != null)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 AppendLog(
                     "Reusing cached route (image and settings unchanged) — no re-generation needed."
                 );
@@ -1373,40 +1447,58 @@ public partial class MainWindow : Window
             }
         }
 
-        var tempPath = Path.Combine(
-            Path.GetTempPath(),
-            $"tdld{System.Random.Shared.Next(1000000, 9999999)}.tdld"
-        );
+        cancellationToken.ThrowIfCancellationRequested();
+        var tempPath = Path.Combine(Path.GetTempPath(), $"tdld-{Guid.NewGuid():N}.tdld");
         var timingSink = new TimingSink();
         // Production: solve the independent per-layer TSPs in parallel across CPU cores (~6-7x
         // faster generation). The emitted .tdld is equivalent (route order differs, coverage same).
         var drawer = new CanvasDrawer(timingSink, ver, AppendLog, parallelSolves: true);
         drawer.ConnectAndConfirmController();
         await drawer.DrawImage(img, settings, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
 
-        // Same wording as upstream, so the two programs' logs read side by side.
-        AppendLog($"True complete overall time is: {timingSink.TotalTime.TotalSeconds}s");
+        // HID polling changes elapsed hardware time; this estimate uses nominal tap durations.
+        AppendLog($"Nominal complete overall time is: {timingSink.TotalTime.TotalSeconds}s");
 
         // Poll-timed taps are a different file format (v4, 16-byte header), so the choice has to
         // be made here rather than inside the sink. Anything but HidPolls writes the v3 file every
         // board in the field already speaks.
-        var fileSink =
-            settings.TapTiming == TapTimingMode.HidPolls
-                ? new FileControllerSink(tempPath, settings.TapHoldPolls, settings.TapReleasePolls)
-                : new FileControllerSink(tempPath);
-        timingSink.ReplayTo(fileSink);
-        fileSink.Dispose();
-        var bytes = File.ReadAllBytes(tempPath);
+        byte[] bytes;
         try
         {
-            File.Delete(tempPath);
+            using (
+                var fileSink =
+                    settings.TapTiming == TapTimingMode.HidPolls
+                        ? new FileControllerSink(
+                            tempPath,
+                            settings.TapHoldPolls,
+                            settings.TapReleasePolls
+                        )
+                        : new FileControllerSink(tempPath)
+            )
+            {
+                timingSink.ReplayTo(fileSink);
+            }
+            cancellationToken.ThrowIfCancellationRequested();
+            bytes = File.ReadAllBytes(tempPath);
         }
-        catch
-        { /* best effort */
+        finally
+        {
+            try
+            {
+                File.Delete(tempPath);
+            }
+            catch (IOException)
+            { /* best effort */
+            }
+            catch (UnauthorizedAccessException)
+            { /* best effort */
+            }
         }
 
         lock (_cacheLock)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             _cachedTdld = bytes;
             _cachedTime = timingSink.TotalTime;
             _cachedFingerprint = fingerprint;
@@ -1418,6 +1510,9 @@ public partial class MainWindow : Window
     // committing to an export. Runs the same route generation an export does.
     private async void EstimateButton_Click(object? sender, RoutedEventArgs e)
     {
+        if (BusyExporting)
+            return;
+
         if (_currentImage == null)
             return;
 
@@ -1430,47 +1525,43 @@ public partial class MainWindow : Window
             return;
         }
 
-        var imageSnapshot = _currentImage!.Copy();
+        using var imageSnapshot = _currentImage!.Copy();
         var drawSettings = GetDrawImageSettings();
-        var token = BeginGeneration();
+        var switchVersion = _currentSettings.SelectedSwitchVersion;
+        if (!TryBeginGeneration(out var token))
+            return;
 
-        BusyExporting = true;
-        EstimateButton.IsEnabled = false;
         DrawTimeLabel.Text = "Draw Time Estimate: estimating…";
         TimeSpan totalTime = TimeSpan.MaxValue;
         string? error = null;
         bool cancelled = false;
 
-        await Task.Run(async () =>
+        try
         {
-            try
+            await Task.Run(async () =>
             {
-                using var img = imageSnapshot;
-                var (_, time) = await GetTdldAsync(
-                    img,
-                    drawSettings,
-                    _currentSettings.SelectedSwitchVersion,
-                    token
-                );
+                var img = imageSnapshot;
+                var (_, time) = await GetTdldAsync(img, drawSettings, switchVersion, token);
                 totalTime = time;
-            }
-            catch (OperationCanceledException)
-            {
-                cancelled = true;
-            }
-            catch (Exception ex)
-            {
-                error = ex.Message;
-            }
-        });
-
-        BusyExporting = false;
-        EndGeneration();
-        EstimateButton.IsEnabled = true;
+            });
+        }
+        catch (OperationCanceledException)
+        {
+            cancelled = true;
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            EndGeneration();
+        }
 
         if (cancelled)
         {
             AppendLog("Generation cancelled.");
+            DrawTimeLabel.Text = "Draw Time Estimate: cancelled";
         }
         else if (error != null)
         {
@@ -1485,6 +1576,9 @@ public partial class MainWindow : Window
 
     private async void ExportUF2Button_Click(object sender, RoutedEventArgs e)
     {
+        if (BusyExporting)
+            return;
+
         if (_currentImage == null)
             return;
 
@@ -1513,19 +1607,22 @@ public partial class MainWindow : Window
         );
 
         var outputPath = file?.TryGetLocalPath();
-        if (outputPath == null)
+        if (
+            outputPath == null
+            || BusyExporting
+            || _currentImage == null
+            || _currentSettings.SelectedSwitchVersion == SwitchVersion.None
+        )
             return;
 
         var chip = sender == RP2350ExportUF2Button ? RPChipType.RP2350 : RPChipType.RP2040;
-        var exportUf2Button =
-            chip == RPChipType.RP2350 ? RP2350ExportUF2Button : RP2040ExportUF2Button;
 
-        var imageSnapshot = _currentImage!.Copy();
+        using var imageSnapshot = _currentImage!.Copy();
         var drawSettings = GetDrawImageSettings();
-        var token = BeginGeneration();
+        var switchVersion = _currentSettings.SelectedSwitchVersion;
+        if (!TryBeginGeneration(out var token))
+            return;
 
-        exportUf2Button.IsEnabled = false;
-        BusyExporting = true;
         TimeSpan totalTime = TimeSpan.MaxValue;
 
         // try/finally so a failure during generation never leaves BusyExporting stuck true
@@ -1534,18 +1631,15 @@ public partial class MainWindow : Window
         {
             await Task.Run(async () =>
             {
-                using var img = imageSnapshot;
-                var (tdldBytes, time) = await GetTdldAsync(
-                    img,
-                    drawSettings,
-                    _currentSettings.SelectedSwitchVersion,
-                    token
-                );
+                var img = imageSnapshot;
+                var (tdldBytes, time) = await GetTdldAsync(img, drawSettings, switchVersion, token);
                 totalTime = time;
+                token.ThrowIfCancellationRequested();
 
                 var uf2Bytes = UF2Flasher.BuildTDLDUF2(tdldBytes, chip);
                 if (uf2Bytes != null && uf2Bytes.Length > 0)
                 {
+                    token.ThrowIfCancellationRequested();
                     File.WriteAllBytes(outputPath, uf2Bytes);
                     AppendLog($"Saved UF2 to {outputPath}");
                 }
@@ -1561,12 +1655,11 @@ public partial class MainWindow : Window
         }
         finally
         {
-            exportUf2Button.IsEnabled = true;
-            BusyExporting = false;
             EndGeneration();
         }
 
-        SetEstimate(totalTime);
+        if (!token.IsCancellationRequested && totalTime != TimeSpan.MaxValue)
+            SetEstimate(totalTime);
     }
 
     private static string GetRPFirmwareFileName(RPChipType chip) =>
@@ -1596,6 +1689,9 @@ public partial class MainWindow : Window
 
     private void FlashFirmwareButton_Click(object? sender, RoutedEventArgs e)
     {
+        if (BusyExporting)
+            return;
+
         var chip = sender == RP2350FlashButton ? RPChipType.RP2350 : RPChipType.RP2040;
         var firmwareFileName = GetRPFirmwareFileName(chip);
         var firmwareFilePath = GetBaseFirmwareFilePath(chip);
@@ -1627,27 +1723,42 @@ public partial class MainWindow : Window
             return;
         }
 
-        File.Copy(firmwareFilePath, Path.Combine(drivePath, firmwareFileName), overwrite: true);
+        if (!TryBeginGeneration(out _, cancellable: false))
+            return;
 
-        var timeout = System.DateTime.Now.AddSeconds(10);
-        while (UF2Flasher.FindDriveForChip(chip) != null)
+        try
         {
-            if (System.DateTime.Now > timeout)
-            {
-                _ = ShowMessageAsync(
-                    "Error flashing base firmware",
-                    "Wrote file but expected it to reset itself by now, maybe try doing it manually..?"
-                );
-                return;
-            }
-            Thread.Sleep(500);
-        }
+            File.Copy(firmwareFilePath, Path.Combine(drivePath, firmwareFileName), overwrite: true);
 
-        _ = ShowMessageAsync(
-            "",
-            "Base firmware flashed! You can now use the standard output button to output your images to it!\nIf this is your first time, its likely flashing red. Simply hold BOOT and plug it back in, or hold BOOT and press reset if you have it."
-        );
-        AppendLog($"Flashed base firmware to {chip}\r\n");
+            var timeout = System.DateTime.Now.AddSeconds(10);
+            while (UF2Flasher.FindDriveForChip(chip) != null)
+            {
+                if (System.DateTime.Now > timeout)
+                {
+                    _ = ShowMessageAsync(
+                        "Error flashing base firmware",
+                        "Wrote file but expected it to reset itself by now, maybe try doing it manually..?"
+                    );
+                    return;
+                }
+                Thread.Sleep(500);
+            }
+
+            _ = ShowMessageAsync(
+                "",
+                "Base firmware flashed! You can now use the standard output button to output your images to it!\nIf this is your first time, its likely flashing red. Simply hold BOOT and plug it back in, or hold BOOT and press reset if you have it."
+            );
+            AppendLog($"Flashed base firmware to {chip}\r\n");
+        }
+        catch (Exception ex)
+        {
+            AppendLog($"{chip} base firmware flash failed: {ex.Message}");
+            _ = ShowMessageAsync("Error flashing base firmware", ex.Message);
+        }
+        finally
+        {
+            EndGeneration();
+        }
     }
 
     private void OutputExplanationButton_Click(object? sender, RoutedEventArgs e)
@@ -1749,6 +1860,9 @@ public partial class MainWindow : Window
 
     private void ThemeMenuItem_Click(object? sender, RoutedEventArgs e)
     {
+        if (_loadingSettings)
+            return;
+
         int index =
             sender == ThemeLightMenuItem ? 1
             : sender == ThemeDarkMenuItem ? 2
@@ -1790,29 +1904,31 @@ public partial class MainWindow : Window
         );
     }
 
-    private void SaveSettings() => _currentSettings.Save();
+    private void SaveSettings()
+    {
+        if (!_loadingSettings)
+            _currentSettings.Save();
+    }
 
     private void GetSettings()
     {
-        _currentSettings = AppSettings.Load(out var warning);
-        if (warning != null)
-            AppendLog(warning);
-
-        SwitchVersionComboBox.SelectedIndex = (int)_currentSettings.SelectedSwitchVersion - 1;
-        SetTheme(_currentSettings.SelectedThemeIndex);
-        ThemeSystemMenuItem.IsChecked = _currentSettings.SelectedThemeIndex == 0;
-        ThemeLightMenuItem.IsChecked = _currentSettings.SelectedThemeIndex == 1;
-        ThemeDarkMenuItem.IsChecked = _currentSettings.SelectedThemeIndex == 2;
-
-        EnableExperimentalMenuItem.IsChecked = _currentSettings.EnableExperimentalFeatures;
-        HidPollTapTimingMenuItem.IsChecked = _currentSettings.UseHidPollTapTiming;
-        CheckForUpdatesCheckBox.IsChecked = _currentSettings.CheckForUpdatesOnStart;
-
-        // Restore the drawing options. _loadingSettings suppresses the change handlers so
-        // restoring a value cannot immediately write it back or kick off a preview rebuild.
         _loadingSettings = true;
         try
         {
+            _currentSettings = AppSettings.Load(out var warning);
+            if (warning != null)
+                AppendLog(warning);
+
+            SwitchVersionComboBox.SelectedIndex = (int)_currentSettings.SelectedSwitchVersion - 1;
+            SetTheme(_currentSettings.SelectedThemeIndex);
+            ThemeSystemMenuItem.IsChecked = _currentSettings.SelectedThemeIndex == 0;
+            ThemeLightMenuItem.IsChecked = _currentSettings.SelectedThemeIndex == 1;
+            ThemeDarkMenuItem.IsChecked = _currentSettings.SelectedThemeIndex == 2;
+
+            EnableExperimentalMenuItem.IsChecked = _currentSettings.EnableExperimentalFeatures;
+            HidPollTapTimingMenuItem.IsChecked = _currentSettings.UseHidPollTapTiming;
+            CheckForUpdatesCheckBox.IsChecked = _currentSettings.CheckForUpdatesOnStart;
+
             if (
                 ColourMatcherComboBox.ItemsSource is IEnumerable<string> matchers
                 && matchers.Contains(_currentSettings.ColourMatcherName)
@@ -1830,6 +1946,7 @@ public partial class MainWindow : Window
                 DenoisingComboBox.SelectedItem = _currentSettings.DenoiserName;
 
             EnableHomeCanvas.IsChecked = _currentSettings.HomeToTopLeft;
+            EnableBucketFills.IsChecked = _currentSettings.EnableBucketFills;
             ReverseColourOrderCheckBox.IsChecked = _currentSettings.ReverseColourOrder;
         }
         finally
@@ -1843,7 +1960,8 @@ public partial class MainWindow : Window
     /// do not treat a restore as a user edit (which would save it straight back and rebuild the
     /// preview before an image is even loaded).
     /// </summary>
-    private bool _loadingSettings;
+    // Active before InitializeComponent and its SelectionChanged events, not just during Load.
+    private bool _loadingSettings = true;
 
     /// <summary>Persists whichever drawing option the user just changed.</summary>
     private void DrawingOptionChanged()
@@ -1862,6 +1980,9 @@ public partial class MainWindow : Window
 
     private void SwitchVersionComboBox_SelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
+        if (_loadingSettings)
+            return;
+
         if (SwitchVersionComboBox.SelectedIndex == 0)
         {
             _currentSettings.SelectedSwitchVersion = SwitchVersion.Switch1;
@@ -1876,12 +1997,18 @@ public partial class MainWindow : Window
             );
         }
         else
-            _currentSettings.SelectedSwitchVersion = SwitchVersion.Switch2;
+            _currentSettings.SelectedSwitchVersion =
+                SwitchVersionComboBox.SelectedIndex == 1
+                    ? SwitchVersion.Switch2
+                    : SwitchVersion.None;
         SaveSettings();
     }
 
     private void EnableExperimentalMenuItem_Click(object? sender, RoutedEventArgs e)
     {
+        if (_loadingSettings)
+            return;
+
         if (EnableExperimentalMenuItem.IsChecked)
         {
             _ = ShowMessageAsync(
@@ -1897,6 +2024,14 @@ public partial class MainWindow : Window
         SaveSettings();
     }
 
+    private void EnableBucketFills_IsCheckedChanged(object? sender, RoutedEventArgs e)
+    {
+        if (_loadingSettings)
+            return;
+        _currentSettings.EnableBucketFills = EnableBucketFills.IsChecked ?? false;
+        SaveSettings();
+    }
+
     /// <summary>
     /// Switches tap timing between milliseconds and host polls. This changes the <c>.tdld</c>
     /// format, so the warning is not decoration: an ESP32 board handed a v4 file rejects it and
@@ -1905,6 +2040,9 @@ public partial class MainWindow : Window
     /// </summary>
     private void HidPollTapTimingMenuItem_Click(object? sender, RoutedEventArgs e)
     {
+        if (_loadingSettings)
+            return;
+
         if (HidPollTapTimingMenuItem.IsChecked)
         {
             _ = ShowMessageAsync(
@@ -1929,6 +2067,9 @@ public partial class MainWindow : Window
 
     private void CheckForUpdatesCheckBox_Click(object? sender, RoutedEventArgs e)
     {
+        if (_loadingSettings)
+            return;
+
         _currentSettings.CheckForUpdatesOnStart = CheckForUpdatesCheckBox.IsChecked;
         SaveSettings();
     }
@@ -1938,7 +2079,7 @@ public partial class MainWindow : Window
         if (_currentImage == null)
             return;
         // very scientific
-        var img = GetPreview();
+        using var img = GetPreview();
         // save it to disk... wherever desired.
         var file = await StorageProvider.SaveFilePickerAsync(
             new FilePickerSaveOptions
@@ -1960,7 +2101,8 @@ public partial class MainWindow : Window
         if (outputPath == null)
             return;
 
-        using var data = SKImage.FromBitmap(img).Encode(SKEncodedImageFormat.Png, 100);
+        using var image = SKImage.FromBitmap(img);
+        using var data = image.Encode(SKEncodedImageFormat.Png, 100);
         File.WriteAllBytes(outputPath, data.ToArray());
 
         AppendLog($"Saved current preview to {outputPath}");
@@ -1972,6 +2114,9 @@ public partial class MainWindow : Window
 #if DEBUG
     private void MenuDebugConnectVirtualGamepad_Click(object? sender, RoutedEventArgs e)
     {
+        if (BusyExporting)
+            return;
+
         if (
             MenuDebugConnectVirtualGamepad == null
             || MenuDebugRunInVirtualGamepad == null
@@ -2001,46 +2146,72 @@ public partial class MainWindow : Window
             _debugVirtualGamepad.Disconnect();
         }
 
-        MenuDebugRunInVirtualGamepad.IsEnabled = _debugVirtualGamepad.IsConnected;
-        MenuDebugOpenVirtualGamepadController.IsEnabled = _debugVirtualGamepad.IsConnected;
+        RefreshOperationButtons();
     }
 
     private async void MenuDebugRunInVirtualGamepad_Click(object? sender, RoutedEventArgs e)
     {
-        if (!_debugVirtualGamepad.IsConnected)
+        if (BusyExporting || !_debugVirtualGamepad.IsConnected)
             return;
 
-        if (string.IsNullOrEmpty(_currentImagePath))
+        if (_currentImage == null)
         {
             _ = ShowMessageAsync("No image selected", "Select an image first.");
             return;
         }
 
-        var imageSnapshot = _currentImage!.Copy();
-        var drawSettings = GetDrawImageSettings();
-        var token = BeginGeneration();
-
-        AppendLog(
-            "Starting to draw with the Virtual Gamepad. Keep focus on the window you want to draw on for the duration of the drawing."
-        );
-
-        await Task.Run(async () =>
+        if (_currentSettings.SelectedSwitchVersion == SwitchVersion.None)
         {
-            using var img = imageSnapshot;
-            var drawer = new CanvasDrawer(
-                new VirtualGamepadSink(_debugVirtualGamepad),
-                _currentSettings.SelectedSwitchVersion,
-                AppendLog
+            _ = ShowMessageAsync(
+                "Select Switch Version",
+                "Select a Switch version before drawing."
             );
-            await drawer.DrawImage(img, drawSettings);
-        });
+            return;
+        }
 
-        AppendLog("Virtual Gamepad is not longer being controller by the drawer.");
+        using var imageSnapshot = _currentImage!.Copy();
+        var drawSettings = GetDrawImageSettings();
+        var switchVersion = _currentSettings.SelectedSwitchVersion;
+        if (!TryBeginGeneration(out var token))
+            return;
+
+        try
+        {
+            AppendLog(
+                "Starting to draw with the Virtual Gamepad. Keep focus on the window you want to draw on for the duration of the drawing."
+            );
+            await Task.Run(async () =>
+            {
+                using var output = new VirtualGamepadSink(_debugVirtualGamepad);
+                try
+                {
+                    var drawer = new CanvasDrawer(output, switchVersion, AppendLog);
+                    await drawer.DrawImage(imageSnapshot, drawSettings, token);
+                }
+                finally
+                {
+                    output.ReleaseAll();
+                }
+            });
+            AppendLog("Virtual Gamepad is no longer being controlled by the drawer.");
+        }
+        catch (OperationCanceledException)
+        {
+            AppendLog("Generation cancelled.");
+        }
+        catch (Exception ex)
+        {
+            AppendLog($"Virtual Gamepad drawing failed: {ex.Message}");
+        }
+        finally
+        {
+            EndGeneration();
+        }
     }
 
     private void MenuDebugOpenVirtualGamepadController_Click(object? sender, RoutedEventArgs e)
     {
-        if (!_debugVirtualGamepad.IsConnected)
+        if (BusyExporting || !_debugVirtualGamepad.IsConnected)
             return;
 
         var window = new VirtualGamepadControllerWindow { VirtualGamepad = _debugVirtualGamepad };

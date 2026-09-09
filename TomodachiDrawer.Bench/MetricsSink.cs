@@ -1,5 +1,9 @@
-using TomodachiDrawer.Core.Interfaces;
+using TomodachiDrawer.Core;
 using TomodachiDrawer.Core.OutputSinks;
+#if !UPSTREAM
+using TomodachiDrawer.Core.Interfaces;
+#endif
+
 
 namespace TomodachiDrawer.Bench
 {
@@ -10,9 +14,8 @@ namespace TomodachiDrawer.Bench
     /// </summary>
     public sealed class MetricsSink : ISwitchOutput
     {
-        // A tap at exactly the ISwitchOutput default durations is a drawing action; every menu
-        // confirmation in CanvasToolbar / ColourPalette / ConnectAndConfirmController passes an
-        // explicit non-default duration. Fragile but it is the only signal in the stream.
+        // Historical heuristic for counting paint actions. Explicit-duration bucket clicks are
+        // excluded, so this is descriptive only; rendered pixels establish actual coverage.
         private const double DefaultHold = 25.0;
         private const double DefaultRelease = 25.0;
 
@@ -21,28 +24,18 @@ namespace TomodachiDrawer.Bench
         /// <summary>
         /// <b>The route-cost metric.</b> <c>NavigateTo</c> emits exactly one DPad tap per cursor
         /// step and diagonals move both axes in one tap, so this count *is* the Chebyshev
-        /// navigation cost. Caveat: menu navigation also taps the DPad, so the absolute number
-        /// mixes canvas travel with menu travel. That does not affect comparisons — for a fixed
-        /// image and settings the menu travel is identical across solver arms, so any *delta* is
-        /// pure route cost.
+        /// navigation cost within the canvas. This total also includes menu navigation, which
+        /// can change when solver arms choose different bucket/brush strategies. Report it as
+        /// total DPad actions rather than interpreting every delta as pen travel.
         /// </summary>
         public long DPadTaps { get; private set; }
 
         /// <summary>
-        /// <b>The coverage check.</b> Cells actually painted: one per stamp, one per bucket click,
-        /// one per isolated fine-detail point, and one per cell of an A-hold run (the
-        /// <c>Press(A)</c> paints the cell under the cursor, then each held DPad step paints the
-        /// next — see <c>CanvasDrawer.FineDetailTsp</c>).
-        /// <para>
-        /// This is invariant to route order and <b>must be identical across solver arms</b> for a
-        /// given image: same layers, same points, only the visiting order differs. If it moves,
-        /// points were dropped or duplicated — which route cost and draw time would both
-        /// misreport as an improvement.
-        /// </para>
-        /// <para>
-        /// Note the A-press *event* count is NOT a coverage metric: a run of k adjacent cells is
-        /// one press, so fewer presses can mean a better route rather than fewer pixels.
-        /// </para>
+        /// <b>A historical paint-action estimate, not a coverage invariant.</b> Counts default
+        /// A taps plus fine-detail cells crossed while holding A. Explicit-duration bucket taps
+        /// are not recognized, and a stamp or fill can paint many cells with one action.
+        /// Different winning bucket/brush strategies legitimately change this value. Use the
+        /// pixel renderer and decoded-input checks to decide correctness.
         /// </summary>
         public long PaintActions { get; private set; }
 
@@ -58,8 +51,8 @@ namespace TomodachiDrawer.Bench
         /// question and this can.
         /// </para>
         /// <para>
-        /// Lower is better, and unlike <see cref="PaintActions"/> it is <i>not</i> invariant: it is
-        /// supposed to move. Coverage is what must not move.
+        /// Lower may indicate a better route; both this count and <see cref="PaintActions"/>
+        /// can legitimately change across strategies. The expected rendered image must not.
         /// </para>
         /// </summary>
         public long HoldRuns { get; private set; }

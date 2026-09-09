@@ -25,6 +25,9 @@ mono_crash.*
 [Dd]ebugPublic/
 [Rr]elease/
 [Rr]eleases/
+# Reviewed release notes are source files, not build output.
+!Docs/releases/
+!Docs/releases/*.md
 x64/
 x86/
 [Ww][Ii][Nn]32/

@@ -62,6 +62,7 @@ namespace TomodachiDrawer.Core
                 + $"|tsp={settings.TSPTimeLimit}"
                 + $"|nolb={settings.DisableLargeBrush}"
                 + $"|exp={settings.EnableExperimentalFeatures}"
+                + $"|buckets={settings.EnableBucketFills}|bucketmin={settings.MinBucketZoneSize}"
                 + $"|home={settings.HomeToTopLeft}"
                 + $"|rev={settings.ReverseColourOrder}"
                 + $"|ee={settings.EarlyTspExitEnabled}"

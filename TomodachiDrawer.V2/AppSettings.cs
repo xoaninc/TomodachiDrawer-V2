@@ -12,6 +12,9 @@ internal class AppSettings
 
     public bool EnableExperimentalFeatures { get; set; } = false;
 
+    // Deliberately independent of the old experimental flag: upgrading must not opt users in.
+    public bool EnableBucketFills { get; set; } = false;
+
     public bool CheckForUpdatesOnStart { get; set; } = true;
 
     public int FirstStartId { get; set; } = 0;

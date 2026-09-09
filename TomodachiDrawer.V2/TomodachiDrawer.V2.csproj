@@ -6,7 +6,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
-    <Version>0.5.0</Version>
+    <VersionPrefix>0.6.0</VersionPrefix>
+    <VersionSuffix>rc.1</VersionSuffix>
     <!-- Ship as "TomodachiDrawer V2". The OS process / exe is the (space-free) assembly name
          TomodachiDrawerV2 (a space would be an invalid avares:// URI authority); the human-facing
          product/title carries the space. -->
@@ -20,13 +21,13 @@
     <NoWarn>$(NoWarn);IL2104</NoWarn>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Avalonia" Version="12.1.1" />
-    <PackageReference Include="Avalonia.Desktop" Version="12.1.1" />
-    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.1" />
-    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.1" />
+    <PackageReference Include="Avalonia" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.2" />
     <!-- Skia's Linux natives don't flow transitively at the right version for the
          linux-x64/linux-arm64 publishes, so pin them explicitly to match Core's SkiaSharp. -->
-    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.151.1" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.151.2" />
     <!-- Native C# esptool for flashing the ESP32-S3 firmware/data partitions -->
     <PackageReference Include="ESPTool" Version="3.0.3" />
   </ItemGroup>
@@ -95,9 +96,11 @@
     <Copy SourceFiles="$(ProjectDir)Packaging/macOS/README.txt" DestinationFolder="$(PublishDir)" />
     <PropertyGroup>
       <PlistSource>$(ProjectDir)Packaging/macOS/Info.plist</PlistSource>
+      <MacBundleVersion>$([System.Text.RegularExpressions.Regex]::Replace('$(Version)', '[-+].*$', ''))</MacBundleVersion>
       <PlistDestination>$([System.IO.Path]::Combine('$(ContentsDir)', 'Info.plist'))</PlistDestination>
       <PlistContent>$([System.IO.File]::ReadAllText('$(PlistSource)'))</PlistContent>
       <PlistContent>$(PlistContent.Replace('{{version}}', '$(Version)'))</PlistContent>
+      <PlistContent>$(PlistContent.Replace('{{numericVersion}}', '$(MacBundleVersion)'))</PlistContent>
     </PropertyGroup>
     <WriteLinesToFile File="$(PlistDestination)" Lines="$(PlistContent)" Overwrite="true" />
   </Target>

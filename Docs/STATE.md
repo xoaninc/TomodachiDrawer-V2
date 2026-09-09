@@ -1,4 +1,51 @@
-# Where the project stands — 2026-09-01 (offline re-check), after the first hardware night
+# Current work — 2026-09-10
+
+**0.6.0-rc.1 has passed local acceptance and is ready for the tag's CI/publication.**
+It is a pre-release for Juan's Switch test; 0.5.0 remains the latest stable release.
+Do not mark it published until the GitHub release and its five assets have been verified.
+
+## Verified
+
+- **38/38 focused drawing comparisons pass**: real photo across V2 0.5.0, frozen main
+  `ae5dbe3`, upstream 0.9.2 and the candidate; candidate serial/1-thread/2-thread/production
+  modes; three synthetics with buckets off/on; production photo at TSP 1 and 5.
+- Every retained run has exact reference pixels, valid decoded commands, and matching v3/v4
+  bodies when replaying the same V2 route. Cross-version source/reference hashes agree.
+- Photo, production mode, buckets off: generation median **4.228 s vs 4.232 s** on main;
+  nominal draw **4651.525 s vs 4661.025 s**. Neither performance threshold was exceeded.
+  Buckets on gives **4312.925 s** nominal draw, generating in **7.814 s**.
+- Core Release suite: **222 tests**, including **320 repeated small drawing generations**.
+  Comparison resume/artifact guards: **14 tests**. Final UI builds and macOS publishing pass;
+  the earlier full-suite result predates UI-only follow-ups. CI reruns Debug/Release tests.
+- GUI startup, change/save and restart preserve bucket/HID flags, colour limit and Switch None.
+  The initial settings-overwrite bug is fixed. The app is closed; user preferences restored.
+- Earlier local GUI cancellation followed by a fresh real-photo v3 export passed, with
+  357,932 decoded events. The downloaded GitHub bundle still needs its final export smoke test.
+- Local macOS arm64 bundle and all three embedded firmwares verified; firmware is unchanged
+  from 0.5.0. No TDLD format change in this candidate.
+
+See [comparison results](COMPARISON_0.6.0_RC1.md), [implementation/scope](IMPLEMENTATION_0.6.0.md),
+[port decisions](UPSTREAM_0.9.2_AUDIT.md), and [Switch checklist](HARDWARE_VALIDATION_0.6.0.md).
+
+## Scope and resumption
+
+Juan explicitly rejected the 10–14-hour matrix and a 45-minute wait. The accepted practical
+scope is 38 comparisons, **not the original 624**. Do not restart the extended matrix by default.
+It retains 48 completed historical rows; partial batches were quarantined for sleep/interruption.
+Upstream 0.9.4 was reviewed and deferred; 0.9.2 is the frozen integration target, not latest.
+
+All raw photo-derived artifacts remain local under `/tmp/tdld-092-audit/focused-final`.
+Frozen sources/adapters and older/quarantined evidence remain under `/tmp/tdld-092-audit`.
+GUI/package reports are under `/tmp/tdld-092-smoke`, including `settings-persistence-result.json`.
+The final local build is `/tmp/tdld-092-app-resumed/TomodachiDrawer V2.app`.
+
+Next: commit/push the reviewed changes and tag 0.6.0-rc.1; wait for that exact commit's CI,
+verify pre-release status and five assets while preserving latest stable 0.5.0; download the
+actual macOS asset to Downloads, smoke-test it and close it. Hardware is Juan's later gate.
+
+---
+
+# Historical report — 2026-09-01, after the first hardware night
 
 Written so nothing depends on remembering the sessions. Start here.
 

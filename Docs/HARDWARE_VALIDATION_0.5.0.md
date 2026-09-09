@@ -61,9 +61,10 @@ gets clicked.
 
 **You do not have to sit through the whole draw.** A 256² image is ~2 hours estimated, but erase-all
 and the bucket fill both happen in roughly the **first minute**, right after the countdown. Once the
-canvas is filled and the first layer starts, the verdict on this item is already in — press **Cancel
-Generation** there and you have also just run §4. One short run covers the riskiest item and the
-cheapest one.
+canvas is filled and the first layer starts, the verdict on this item is already in. Unplug the
+board from the console if stopping this hardware test. **Cancel Generation only cancels route
+calculation on the computer; it cannot stop a board already drawing.** Run §4 separately while
+the computer is generating a route.
 
 **Need a test image?** `dotnet run --project TomodachiDrawer.Bench -c Release -- --tsp 0.2 --colours 32 --render-out /tmp/r`
 writes `/tmp/r/mosaic256-expected.png` — 256×256, fully opaque, already quantized to 32 colours.
@@ -150,8 +151,8 @@ Same board, same photo, one variable. Months of this project's guessing collapse
 
 | Default | Poll timing | Verdict |
 |---|---|---|
-| desyncs | clean | Dropped taps confirmed. Poll timing becomes the default, slowness and all |
-| desyncs | desyncs | Not dropped taps. Look at the canvas type (#173) and the dock (#97) instead |
+| desyncs | clean | Supports a timing-related cause; repeat before changing defaults |
+| desyncs | desyncs | Inconclusive: lost inputs remain possible; also examine canvas type and dock |
 | clean | — | Nothing to chase this run |
 
 Expect it to draw **more slowly**. That is why upstream shelved the idea, and it is not a reason to

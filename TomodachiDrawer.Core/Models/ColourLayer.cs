@@ -1,4 +1,4 @@
-﻿using TomodachiDrawer.Core.ImageProcessing;
+using TomodachiDrawer.Core.ImageProcessing;
 
 namespace TomodachiDrawer.Core.Models
 {
@@ -23,5 +23,19 @@ namespace TomodachiDrawer.Core.Models
 
         /// <summary>Interior points to click with the bucket tool after drawing the outline.</summary>
         public HashSet<CanvasPoint> BucketClicks = [];
+
+        /// <summary>Independent geometry, so planning one candidate cannot alter another.</summary>
+        public ColourLayer Clone() =>
+            new()
+            {
+                Colour = Colour,
+                Extents = Extents,
+                FineDetailPoints = new HashSet<CanvasPoint>(FineDetailPoints),
+                BucketClicks = new HashSet<CanvasPoint>(BucketClicks),
+                StampsBySize = StampsBySize.ToDictionary(
+                    pair => pair.Key,
+                    pair => new List<CanvasPoint>(pair.Value)
+                ),
+            };
     }
 }

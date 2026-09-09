@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using Google.OrTools.ConstraintSolver;
 using SkiaSharp;
 using TomodachiDrawer.Core.ImageProcessing;
@@ -28,10 +28,13 @@ namespace TomodachiDrawer.Core
         /// <summary>
         /// When true, the (independent) per-layer/per-phase TSP solves are computed in parallel
         /// across CPU cores BEFORE the (serial) input emission, instead of solving inline. The
-        /// emission logic is unchanged; only the source of each route differs. Default false
-        /// (serial, byte-identical to the original) — production (Estimate/Export) opts in.
+        /// candidate selection and emission remain sequential. Default false (serial) — production
+        /// (Estimate/Export) opts in.
         /// </summary>
         private readonly bool _parallelSolves;
+
+        // Test seam observes the actual OR-Tools parameters at the solve boundary, including workers.
+        internal Action<RoutingSearchParameters>? SolverParametersObserver { get; set; }
 
         /// <summary>
         /// Overrides the pre-solve thread count. Null uses the default (~80% of logical cores).
@@ -87,6 +90,8 @@ namespace TomodachiDrawer.Core
             CancellationToken cancellationToken = default
         )
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            ArgumentOutOfRangeException.ThrowIfLessThan(settings.MinBucketZoneSize, 1);
             if (image.Width > CanvasWidth || image.Height > CanvasHeight)
                 throw new InvalidDataException(
                     $"Image too big. Max is {CanvasWidth}x{CanvasHeight}."
@@ -109,9 +114,11 @@ namespace TomodachiDrawer.Core
 
             // Also we need to pass in the quantization method and dithering settings as arguments.
 
-            _earlyExitEnabled = settings.EarlyTspExitEnabled;
-            _earlyExitRateCoefficient = settings.EarlyTspExitRateCoefficient;
-            _earlyExitSolutionsDistance = settings.EarlyTspExitSolutionsDistance;
+            _solverOptions = new SolverOptions(
+                settings.EarlyTspExitEnabled,
+                settings.EarlyTspExitRateCoefficient,
+                settings.EarlyTspExitSolutionsDistance
+            );
 
             if (!string.IsNullOrEmpty(settings.DenoiserName))
             {
@@ -149,14 +156,9 @@ namespace TomodachiDrawer.Core
             // biggest.
             PaletteColour? bucketColour = null;
 
-            // This below uses the bucket on switch 2, but is generally stable enough since it is just a one off bucket use
-            // that doesnt even move the cursor.
-            // The dynamic bucket fill on the other hand is prone to desyncs even on switch 2, thus is classified as experimental.
-            if (
-                _switchVersion == SwitchVersion.Switch2
-                && image.Width == 256
-                && image.Height == 256
-            )
+            // One global fill needs no cursor movement. Switch 1 uses longer menu/click delays.
+            // Dynamic fills below are separately opt-in on either console.
+            if (image.Width == 256 && image.Height == 256)
             {
                 _log("Seeing if we can use the bucket to save time");
                 bool anyTransparent = false;
@@ -188,12 +190,15 @@ namespace TomodachiDrawer.Core
                     _toolbar.ClearCanvas();
                     _trace?.EraseAll();
 
-                    _toolbar.SelectBucket();
+                    bool paranoid = _switchVersion == SwitchVersion.Switch1;
                     _palette.SelectColour(bucketColour.Value, 25.0);
-                    _realOutput.Tap(Button.A);
+                    _toolbar.SelectBucket(paranoid);
+                    _realOutput.Tap(Button.A, paranoid ? 100 : 25, paranoid ? 75 : 25);
                     // Seeded wherever the cursor is; the canvas is blank, so it floods everything.
                     _trace?.BucketFill(bucketColour.Value.skColor, _cursorX, _cursorY);
-                    _realOutput.Delay(1000); // This is probably generous but bucket fill seems to cause a short stutter.
+                    _realOutput.Delay(paranoid ? 2000 : 1000);
+                    if (paranoid)
+                        _toolbar.ReselectLastBrush();
                 }
                 else
                 {
@@ -201,66 +206,139 @@ namespace TomodachiDrawer.Core
                 }
             }
 
-            if (settings.EnableExperimentalFeatures)
-            {
-                if (_switchVersion == SwitchVersion.Switch2)
-                {
-                    _log("Finding large bucket-fillable zones...");
-                    int sum = 0;
-                    foreach (var l in layers)
-                    {
-                        sum += DetectBucketZones(l, image.Width, image.Height);
-                    }
-                    _log($"\tFound {sum} dynamic bucket fill zones across image.");
-                }
-                else
-                {
-                    _log("Can't perform large bucket-fillable search because Switch 1 is laggy :(");
-                }
-            }
-            else
-            {
-                _log("Experimental features disabled, so not running dynamic bucket fill scan.");
-            }
+            cancellationToken.ThrowIfCancellationRequested();
+            if (settings.EnableBucketFills && !settings.ReverseColourOrder)
+                SealOrderLayers(layers, image.Width, image.Height);
 
-            // Stamp/uniform area detection
-            // TODO: This not useful with the new bucket-fillable search..? Except unless theres
-            // a large number of small areas that were rejected for being too small during the bucket zone search.
-            // TODO: Figure that out lol
-            _log("Detecting uniform areas for large brushes...");
-            if (!settings.DisableLargeBrush)
-            {
-                foreach (var l in layers)
-                {
-                    DetectUniformAreas(l, image.Width, image.Height);
-                }
-            }
-
-            // PARALLEL PRE-SOLVE: with all layers/phases now fixed, solve every (independent) TSP
-            // concurrently before the serial emission. Null when not enabled → emission solves
-            // inline as before. See BuildPreRoutes.
-            var preRoutes = _parallelSolves
-                ? BuildPreRoutes(layers, settings, cancellationToken)
-                : null;
-
-            double totalInLayerTime = 0.0;
-
-            var totalLayers = layers.Count;
-            // 80% divided by total layers.
-            int layerNumber = 0;
-            foreach (var l in layers)
+            // Complete original layers determine the walls available to each later layer.
+            // Candidate choice cannot change coverage, so geometry can be prepared before solving.
+            var prepared = new List<(int Plain, int? Bucket)>();
+            var candidates = new List<ColourLayer>();
+            var painted = new bool[image.Width, image.Height];
+            foreach (var original in layers)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                layerNumber++;
+                var plain = original.Clone();
+                _log(
+                    $"Preparing candidate {candidates.Count + 1} plain geometry for {original.Colour.DisplayName}"
+                );
+                if (!settings.DisableLargeBrush)
+                    DetectUniformAreas(plain, image.Width, image.Height);
+                candidates.Add(plain);
+                int plainId = candidates.Count;
+                int? bucketId = null;
+                if (settings.EnableBucketFills)
+                {
+                    var bucket = original.Clone();
+                    int clicks = DetectBucketZones(
+                        bucket,
+                        image.Width,
+                        image.Height,
+                        painted,
+                        settings.MinBucketZoneSize
+                    );
+                    if (clicks > 0)
+                    {
+                        _log(
+                            $"Preparing candidate {candidates.Count + 1} bucket geometry for {original.Colour.DisplayName}"
+                        );
+                        if (!settings.DisableLargeBrush)
+                            DetectUniformAreas(bucket, image.Width, image.Height);
+                        candidates.Add(bucket);
+                        bucketId = candidates.Count;
+                    }
+                }
+                prepared.Add((plainId, bucketId));
+                foreach (var point in original.FineDetailPoints)
+                    painted[point.X, point.Y] = true;
+            }
 
-                _palette.SelectColour(l.Colour, 25.0);
+            // Candidate IDs are unique across both variants and never depend on worker completion.
+            // Geometry is frozen from here onward. Workers only receive copied point lists.
+            var preRoutes = _parallelSolves
+                ? BuildPreRoutes(candidates, settings, cancellationToken)
+                : null;
+            int logicalLayerNumber = 0;
+            foreach (var pair in prepared)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                logicalLayerNumber++;
+                var chosenCandidate = candidates[pair.Plain - 1];
+                _palette.SelectColour(chosenCandidate.Colour, 25.0);
+                var chosen = BuildLayerPlan(
+                    candidates[pair.Plain - 1],
+                    pair.Plain,
+                    settings,
+                    preRoutes,
+                    cancellationToken
+                );
+                if (pair.Bucket is int bucketId)
+                {
+                    var bucket = BuildLayerPlan(
+                        candidates[bucketId - 1],
+                        bucketId,
+                        settings,
+                        preRoutes,
+                        cancellationToken
+                    );
+                    _log(
+                        $"Bucket: {bucket.Sink.TotalSeconds:F3}s vs plain {chosen.Sink.TotalSeconds:F3}s (candidate comparison; nominal timing)"
+                    );
+                    if (bucket.Sink.TotalMilliseconds <= chosen.Sink.TotalMilliseconds)
+                    {
+                        chosen = bucket;
+                        chosenCandidate = candidates[bucketId - 1];
+                    }
+                }
+                cancellationToken.ThrowIfCancellationRequested();
+                chosen.Sink.ReplayTo(_realOutput);
+                if (_trace != null)
+                    chosen.Trace!.ReplayTo(_trace);
+                _cursorX = chosen.EndX;
+                _cursorY = chosen.EndY;
+                _toolbar.Restore(chosen.Toolbar);
+                string selectedVariant =
+                    chosenCandidate.BucketClicks.Count > 0 ? "bucket" : "plain";
+                _log(
+                    $"[{logicalLayerNumber}/{prepared.Count}] {chosenCandidate.Colour.DisplayName}: emitted selected {selectedVariant} plan, {chosenCandidate.BucketClicks.Count} bucket fills, nominal {chosen.Sink.TotalSeconds:F3}s"
+                );
+            }
+            _log("Done routing!");
+        }
 
+        private sealed record LayerPlan(
+            TimingSink Sink,
+            DrawTrace? Trace,
+            int EndX,
+            int EndY,
+            CanvasToolbar.ToolbarState Toolbar
+        );
+
+        private LayerPlan BuildLayerPlan(
+            ColourLayer l,
+            int candidateId,
+            DrawImageSettings settings,
+            Dictionary<(int, RoutingPhaseKind, int), PreSolvedRoute>? preRoutes,
+            CancellationToken cancellationToken
+        )
+        {
+            int entryX = _cursorX,
+                entryY = _cursorY;
+            var entryToolbar = _toolbar.Snapshot();
+            var sink = new TimingSink();
+            var trace = _trace != null ? new DrawTrace() : null;
+            string candidateLabel =
+                $"[Candidate {candidateId} {(l.BucketClicks.Count > 0 ? "bucket" : "plain")}]";
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
                 // STAMPS
                 if (l.StampsBySize?.Count > 0)
                 {
                     var stampSink = new TimingSink();
                     foreach (var sbs in l.StampsBySize)
                     {
+                        cancellationToken.ThrowIfCancellationRequested();
                         if (sbs.Value.Count == 0)
                             continue;
                         int brushSize = sbs.Key;
@@ -280,7 +358,7 @@ namespace TomodachiDrawer.Core
                         if (
                             preRoutes != null
                             && preRoutes.TryGetValue(
-                                (layerNumber, RoutingPhaseKind.Stamp, brushSize),
+                                (candidateId, RoutingPhaseKind.Stamp, brushSize),
                                 out var preStamp
                             )
                         )
@@ -299,19 +377,19 @@ namespace TomodachiDrawer.Core
                         {
                             NavigateTo(stampSink, point);
                             (stampSink as ISwitchOutput).Tap(Button.A);
-                            _trace?.Stamp(l.Colour.skColor, brushSize, point.X, point.Y);
+                            trace?.Stamp(l.Colour.skColor, brushSize, point.X, point.Y);
                         }
                     }
-                    _log($"\tStamps: {stampSink.TotalSeconds:F3}s");
-                    stampSink.ReplayTo(_realOutput);
-                    totalInLayerTime += stampSink.TotalTime.TotalSeconds;
+                    _log($"{candidateLabel} planning stamps: nominal {stampSink.TotalSeconds:F3}s");
+                    stampSink.ReplayTo(sink);
                 }
                 // END STAMPS.
 
                 // ============= Fine details
                 if (l.FineDetailPoints.Count > 0)
                 {
-                    _toolbar.SelectBrush(1); // no-op if already selected.
+                    cancellationToken.ThrowIfCancellationRequested();
+                    _toolbar.SelectBrush(sink, 1); // no-op if already selected.
 
                     // Dry run both to get timing, TimingSink stores
                     // the outputs and time taken so it can be replayed without needing to rerun
@@ -320,7 +398,7 @@ namespace TomodachiDrawer.Core
                     int savedY = _cursorY;
 
                     var snakeSink = new TimingSink();
-                    var snakeTrace = _trace != null ? new DrawTrace() : null;
+                    var snakeTrace = trace != null ? new DrawTrace() : null;
                     FineDetailSnake(snakeSink, l, snakeTrace);
 
                     int afterSnakeX = _cursorX;
@@ -330,7 +408,7 @@ namespace TomodachiDrawer.Core
                     _cursorY = savedY;
 
                     var tspSink = new TimingSink();
-                    var tspTrace = _trace != null ? new DrawTrace() : null;
+                    var tspTrace = trace != null ? new DrawTrace() : null;
                     FineDetailTsp(
                         tspSink,
                         l,
@@ -338,7 +416,7 @@ namespace TomodachiDrawer.Core
                         tspTrace,
                         preRoutes != null
                         && preRoutes.TryGetValue(
-                            (layerNumber, RoutingPhaseKind.FineDetail, 1),
+                            (candidateId, RoutingPhaseKind.FineDetail, 1),
                             out var preFine
                         )
                             ? preFine
@@ -353,19 +431,19 @@ namespace TomodachiDrawer.Core
                         !tspHasSolution || snakeSink.TotalMilliseconds <= tspSink.TotalMilliseconds;
                     if (usedSnake)
                     {
-                        snakeSink.ReplayTo(_realOutput);
-                        if (_trace != null)
-                            snakeTrace!.ReplayTo(_trace);
-                        totalInLayerTime += snakeSink.TotalTime.TotalSeconds;
+                        snakeSink.ReplayTo(sink);
+                        if (trace != null)
+                            snakeTrace!.ReplayTo(trace);
+
                         _cursorX = afterSnakeX;
                         _cursorY = afterSnakeY;
                     }
                     else
                     {
-                        tspSink.ReplayTo(_realOutput);
-                        if (_trace != null)
-                            tspTrace!.ReplayTo(_trace);
-                        totalInLayerTime += tspSink.TotalTime.TotalSeconds;
+                        tspSink.ReplayTo(sink);
+                        if (trace != null)
+                            tspTrace!.ReplayTo(trace);
+
                         _cursorX = afterTspX;
                         _cursorY = afterTspY;
                     }
@@ -374,17 +452,17 @@ namespace TomodachiDrawer.Core
                         ? $"{tspSink.TotalTime.TotalSeconds:F3}s"
                         : "no solution";
                     _log(
-                        $"[{layerNumber}/{totalLayers}] {l.Colour.DisplayName} ({l.FineDetailPoints.Count} pts): snake={snakeSink.TotalTime.TotalSeconds:F3}s, tsp={tspPart} -> {(usedSnake ? "snake" : "tsp")}"
+                        $"{candidateLabel} planning {l.Colour.DisplayName} ({l.FineDetailPoints.Count} pts): snake={snakeSink.TotalTime.TotalSeconds:F3}s, tsp={tspPart} -> {(usedSnake ? "snake" : "tsp")}"
                     );
                 }
 
                 // Bucket clicks. (The bucket outlines are merged into FineDetailPoints)
                 if (l.BucketClicks.Count > 0)
                 {
-                    _log($"\tPerforming bucket fills: {l.BucketClicks.Count} clicks");
+                    _log($"{candidateLabel} planning bucket fills: {l.BucketClicks.Count} clicks");
 
                     int bucketCount = l.BucketClicks.Count;
-                    _toolbar.SelectBucket();
+
                     // tsp solve the points
                     var bucketClickRouteTimeout = 0.25f;
                     if (bucketCount > 50)
@@ -393,7 +471,7 @@ namespace TomodachiDrawer.Core
                     if (
                         preRoutes != null
                         && preRoutes.TryGetValue(
-                            (layerNumber, RoutingPhaseKind.BucketClicks, 1),
+                            (candidateId, RoutingPhaseKind.BucketClicks, 1),
                             out var preBucket
                         )
                     )
@@ -414,14 +492,25 @@ namespace TomodachiDrawer.Core
 
                     foreach (var click in optimizedBucketClickRoute)
                     {
-                        NavigateTo(_realOutput, click);
-                        _realOutput.Tap(Button.A);
-                        _trace?.BucketFill(l.Colour.skColor, click.X, click.Y);
-                        _realOutput.Delay(500); // Bit generous given this is now switch 2 only but justtttt in case the switch struggles with the flood fill :p
+                        cancellationToken.ThrowIfCancellationRequested();
+                        NavigateTo(sink, click);
+                        _toolbar.SelectBucket(sink);
+                        ((ISwitchOutput)sink).Tap(Button.A, 100, 75);
+                        trace?.BucketFill(l.Colour.skColor, click.X, click.Y);
+                        sink.Delay(_switchVersion == SwitchVersion.Switch1 ? 600 : 400);
+                        _toolbar.ReselectLastBrush(sink, paranoid: true);
                     }
                 }
+
+                cancellationToken.ThrowIfCancellationRequested();
+                return new LayerPlan(sink, trace, _cursorX, _cursorY, _toolbar.Snapshot());
             }
-            _log($"Done routing!");
+            finally
+            {
+                _cursorX = entryX;
+                _cursorY = entryY;
+                _toolbar.Restore(entryToolbar);
+            }
         }
 
         private static readonly int[] LargeBrushSizes = [27, 19, 13, 7, 3];
@@ -456,6 +545,103 @@ namespace TomodachiDrawer.Core
             int width,
             int height,
             int minZoneSize = 36
+        ) => DetectBucketZones(l, width, height, new bool[width, height], minZoneSize);
+
+        private static void SealOrderLayers(List<ColourLayer> layers, int width, int height)
+        {
+            int n = layers.Count;
+
+            var owner = new int[width, height];
+            for (int x = 0; x < width; x++)
+            for (int y = 0; y < height; y++)
+                owner[x, y] = -1;
+
+            for (int i = 0; i < n; i++)
+                foreach (var p in layers[i].FineDetailPoints)
+                    owner[p.X, p.Y] = i;
+
+            // adj[a,b] is how many of a's pixels touch b, ie the bill a gets for going first.
+            var adj = new int[n, n];
+
+            // direct neighbours only, same as the bucket.
+            int[] dx = { 0, 0, -1, 1 };
+            int[] dy = { -1, 1, 0, 0 };
+            Span<int> seen = stackalloc int[4];
+
+            for (int x = 0; x < width; x++)
+            {
+                for (int y = 0; y < height; y++)
+                {
+                    int a = owner[x, y];
+                    if (a < 0)
+                        continue;
+
+                    int seenCount = 0;
+                    for (int i = 0; i < 4; i++)
+                    {
+                        int tx = x + dx[i];
+                        int ty = y + dy[i];
+                        if (tx < 0 || tx >= width || ty < 0 || ty >= height)
+                            continue;
+
+                        int b = owner[tx, ty];
+                        if (b < 0 || b == a)
+                            continue;
+
+                        // a pixel touching the same layer twice is still just the one pixel to draw.
+                        if (seen[..seenCount].Contains(b))
+                            continue;
+
+                        seen[seenCount++] = b;
+                        adj[a, b]++;
+                    }
+                }
+            }
+
+            // Fill it back to front. Whatever we put last makes everything still unplaced pay for its
+            // border against it, so each round just shove whichever is cheapest to the back.
+            // Greedy, but theres only ever a handful of layers so its not worth being clever.
+            var order = new List<ColourLayer>(n);
+            var placed = new bool[n];
+
+            for (int slot = 0; slot < n; slot++)
+            {
+                int best = 0;
+                int bestCost = int.MaxValue;
+
+                for (int i = 0; i < n; i++)
+                {
+                    if (placed[i])
+                        continue;
+
+                    int cost = 0;
+                    for (int j = 0; j < n; j++)
+                        if (j != i && !placed[j])
+                            cost += adj[j, i];
+
+                    if (cost < bestCost)
+                    {
+                        bestCost = cost;
+                        best = i;
+                    }
+                }
+
+                placed[best] = true;
+                order.Add(layers[best]);
+            }
+
+            order.Reverse();
+            layers.Clear();
+            layers.AddRange(order);
+        }
+
+        /// <param name="painted">What earlier layers already drew, the fill cant escape through it.</param>
+        public static int DetectBucketZones(
+            ColourLayer l,
+            int width,
+            int height,
+            bool[,] painted,
+            int minZoneSize = 36
         )
         {
             var workingSet = new bool[width, height];
@@ -487,7 +673,15 @@ namespace TomodachiDrawer.Core
                         int ty = y + dy[i];
 
                         // handle edges as outline pixels.
-                        if (tx < 0 || tx >= width || ty < 0 || ty >= height || !workingSet[tx, ty])
+                        if (tx < 0 || tx >= width || ty < 0 || ty >= height)
+                        {
+                            isOutlinePixel = true;
+                            break;
+                        }
+
+                        // only outline against stuff the fill could actually escape into, an earlier
+                        // layer is already a wall so putting ours right next to it does nothing.
+                        if (!workingSet[tx, ty] && !painted[tx, ty])
                         {
                             isOutlinePixel = true;
                             break;
@@ -840,9 +1034,7 @@ namespace TomodachiDrawer.Core
             PreSolvedRoute? precomputed = null
         )
         {
-            // Find start point, this logic will need adjusted in time
-            // when we eventually reorder layers to be the most optimal.
-
+            // Orient from the current candidate cursor after all earlier selected layers.
             var pointsList = l.FineDetailPoints.ToList();
 
             List<CanvasPoint> optimizedRoute;
@@ -909,9 +1101,9 @@ namespace TomodachiDrawer.Core
 
         /// <summary>
         /// Solves every (independent) per-layer/per-phase TSP concurrently — this is the expensive
-        /// work — before the serial emission. Keyed by (1-based layer number, phase kind, brush
-        /// size), matching the keys the emission loop looks up. Each value is the solved route, or
-        /// the input order if the solver returned nothing, so every key maps to a route covering
+        /// work — before the serial emission. Keyed by (candidate ID, phase kind, brush size).
+        /// Candidate IDs are 1-based and unique across plain and bucket variants.
+        /// Each value is the solved route, or a nearest-neighbour fallback, covering
         /// all of its points. Pure: only calls <see cref="RouteSolver"/> (no cursor/palette state).
         /// </summary>
         private Dictionary<(int, RoutingPhaseKind, int), PreSolvedRoute> BuildPreRoutes(
@@ -924,9 +1116,8 @@ namespace TomodachiDrawer.Core
             var pts = new List<List<CanvasPoint>>();
             var times = new List<float>();
 
-            // MUST iterate layers in the same order as the emission loop so the 1-based layerNumber
-            // keys line up. Stamp brush sizes come only from LargeBrushSizes (3..27, never 1), so
-            // (layer, Stamp, size) never collides with (layer, FineDetail/BucketClicks, 1).
+            // MUST retain prepared candidate order so the 1-based candidate IDs line up.
+            // Stamp brush sizes are 3..27, never 1; the phase also distinguishes all keys.
             int layerNumber = 0;
             foreach (var l in layers)
             {
@@ -989,7 +1180,9 @@ namespace TomodachiDrawer.Core
                             pts[i],
                             times[i],
                             out _,
-                            holdsAAcrossAdjacent: keys[i].Item2 == RoutingPhaseKind.FineDetail
+                            _solverOptions,
+                            holdsAAcrossAdjacent: keys[i].Item2 == RoutingPhaseKind.FineDetail,
+                            parametersObserver: SolverParametersObserver
                         );
                         // Cursor-free nearest-neighbour rather than raw input order: the emission
                         // path uses NearestNeighbourRoute for the same case, but that one starts
@@ -1002,9 +1195,16 @@ namespace TomodachiDrawer.Core
                                     IsCycle: false
                                 );
                     }
-                    catch
+                    catch (OperationCanceledException)
                     {
-                        // Never let one job abort the whole generation.
+                        throw;
+                    }
+                    catch (Exception error)
+                    {
+                        _log(
+                            $"Route {keys[i]} failed; retaining every point with nearest-neighbour fallback: {error.Message}"
+                        );
+                        // A failed optimization must never lose drawing points.
                         solved[i] = new PreSolvedRoute(
                             RouteSolver.NearestNeighbourFrom(pts[i], 0),
                             IsCycle: false
@@ -1013,6 +1213,7 @@ namespace TomodachiDrawer.Core
                 }
             );
 
+            cancellationToken.ThrowIfCancellationRequested();
             var dict = new Dictionary<(int, RoutingPhaseKind, int), PreSolvedRoute>(keys.Count);
             for (int i = 0; i < keys.Count; i++)
                 dict[keys[i]] = solved[i];

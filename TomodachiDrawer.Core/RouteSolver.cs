@@ -87,6 +87,27 @@ namespace TomodachiDrawer.Core
             double earlyExitRateCoefficient = 0.05,
             int earlyExitSolutionsDistance = 10,
             bool holdsAAcrossAdjacent = false
+        ) =>
+            Solve(
+                inputPoints,
+                timeLimitSeconds,
+                out solveMs,
+                new SolverOptions(
+                    earlyExitEnabled,
+                    earlyExitRateCoefficient,
+                    earlyExitSolutionsDistance
+                ),
+                holdsAAcrossAdjacent
+            );
+
+        internal static List<CanvasPoint> Solve(
+            IReadOnlyList<CanvasPoint> inputPoints,
+            float timeLimitSeconds,
+            out double solveMs,
+            SolverOptions options,
+            bool holdsAAcrossAdjacent = false,
+            int depot = 0,
+            Action<RoutingSearchParameters>? parametersObserver = null
         )
         {
             if (inputPoints.Count == 0)
@@ -107,7 +128,7 @@ namespace TomodachiDrawer.Core
             for (int i = 0; i < inputPoints.Count; i++)
                 points[i] = inputPoints[i];
 
-            using var manager = new RoutingIndexManager(points.Length, 1, 0);
+            using var manager = new RoutingIndexManager(points.Length, 1, depot);
             using var routing = new RoutingModel(manager);
 
             int transitCallbackIndex = routing.RegisterTransitCallback(
@@ -127,10 +148,11 @@ namespace TomodachiDrawer.Core
 
             var searchParameters = BuildSearchParameters(
                 timeLimitSeconds,
-                earlyExitEnabled,
-                earlyExitRateCoefficient,
-                earlyExitSolutionsDistance
+                options.EarlyExitEnabled,
+                options.EarlyExitRateCoefficient,
+                options.EarlyExitSolutionsDistance
             );
+            parametersObserver?.Invoke(searchParameters);
 
             var sw = Stopwatch.StartNew();
             var solution = routing.SolveWithParameters(searchParameters);

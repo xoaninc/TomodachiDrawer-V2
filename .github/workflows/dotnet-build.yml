@@ -32,10 +32,13 @@ jobs:
       run: dotnet build --configuration ${{ matrix.configuration }} --no-restore
     - name: Test
       run: dotnet test --configuration ${{ matrix.configuration }} --no-build --verbosity normal /p:EnableWindowsTargeting=true
+    - name: Test comparison artifact and resume guards
+      if: matrix.configuration == 'Release'
+      run: python3 -m unittest discover -s Comparison -p 'test_*.py'
   # The ESP32 parser has 28 host-runnable checks that, until now, no machine ran: the only runner
   # was a PowerShell script. They matter more than most, because that firmware's binary cannot
   # currently be rebuilt here - there is no ESP-IDF job below - so pinning the source's behaviour is
-  # the only guard there is that source and shipped binary still agree.
+  # a guard against parser-source regressions. Host tests do not execute the shipped binary.
   test-esp32-parser:
     name: ESP32 tdld parser (host tests)
     runs-on: ubuntu-latest
@@ -116,7 +119,7 @@ jobs:
         echo "Committed ${{ matrix.platform }} firmware matches this build."
   publish-avalonia:
     runs-on: ubuntu-latest
-    needs: [build, build-rp-firmware]
+    needs: [build, build-rp-firmware, test-esp32-parser]
     strategy:
       fail-fast: false
       matrix:
@@ -150,7 +153,7 @@ jobs:
         name: TomodachiDrawer-V2-${{ matrix.runtime }}-${{ matrix.configuration }}
         path: TomodachiDrawer.V2/bin/${{ matrix.configuration }}/net10.0/${{ matrix.runtime }}/publish/
   release:
-    name: Draft release
+    name: Publish release
     runs-on: ubuntu-latest
     needs: publish-avalonia
     if: startsWith(github.ref, 'refs/tags/')
@@ -192,9 +195,25 @@ jobs:
     - name: Create release
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        RELEASE_TAG: ${{ github.ref_name }}
       run: |
-        # Publish a release for this tag automatically. If a release for the tag already
-        # exists, just (re)upload the assets instead of failing.
-        gh release create "${{ github.ref_name }}" final-packages/* \
-          --generate-notes --title "TomodachiDrawer V2 ${{ github.ref_name }}" \
-        || gh release upload "${{ github.ref_name }}" final-packages/* --clobber
+        if [[ "$RELEASE_TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+-rc\.[1-9][0-9]*$ ]]; then
+          flags=(--prerelease --latest=false)
+        elif [[ "$RELEASE_TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          flags=(--prerelease=false)
+        else
+          echo "Unsupported release tag: $RELEASE_TAG"
+          exit 1
+        fi
+        notes="Docs/releases/$RELEASE_TAG.md"
+        if [[ ! -f "$notes" ]]; then
+          echo "Missing reviewed release notes: $notes"
+          exit 1
+        fi
+        if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+          gh release upload "$RELEASE_TAG" final-packages/* --clobber
+          gh release edit "$RELEASE_TAG" "${flags[@]}" --notes-file "$notes"
+        else
+          gh release create "$RELEASE_TAG" final-packages/* "${flags[@]}" \
+            --notes-file "$notes" --title "TomodachiDrawer V2 $RELEASE_TAG"
+        fi

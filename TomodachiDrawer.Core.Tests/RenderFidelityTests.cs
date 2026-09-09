@@ -64,8 +64,8 @@ namespace TomodachiDrawer.Core.Tests
             return bmp;
         }
 
-        // Both solver arms, and both the transparent and fully-opaque cases — the latter is what
-        // triggers the erase-all + bucket-fill path on Switch 2.
+        // Both solver arms and transparent/opaque small images. The actual 256x256
+        // background bucket is exercised separately in BucketRenderFidelityTests.
         [Theory]
         [InlineData(false, true)]
         [InlineData(true, true)]

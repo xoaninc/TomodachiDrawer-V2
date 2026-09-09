@@ -16,8 +16,12 @@
 
 TomodachiDrawer is a collection of firmware and software that generates inputs to control a Nintendo Switch to draw arbitrary images in the Palette House.
 
-## WARNING: Switch 1 is prone to desyncs
-See #12 , unfortunately it seems that the Switch 1 is prone to desyncing randomly from inexplicable lag spikes. Current testing suggests this is related to the 3D preview. Switch 2 users are unaffected, and drawings of types that are just lone transparent images do not seem to be prone to these effects. 0.3.1 and 0.3.2 added some mitigations for some other types of delay, but the lag one is still under investigation. If you have any information or clips of the desync occuring, be sure to comment it on that issue!
+## Hardware validation
+Desynchronization has been reported on both Switch generations; V2's long Switch 2 drawing
+also shifted after roughly two hours. Offline rendering can verify the planned image, but
+cannot establish that the game received every input. Version **0.6.0-rc.1** is a candidate for
+hardware testing with dynamic buckets off by default. Follow the
+[hardware checklist](Docs/HARDWARE_VALIDATION_0.6.0.md) and keep the log and final canvas photo.
 
 <img src="Docs/baconator_preview.webp" width="600" alt="Tomodachi Drawer drawing a Baconator">
 <img src="Docs/nurture_preview.webp" width="600" alt="Tomodachi Drawer drawing the Porter Robinson album art for Nurture">
@@ -34,17 +38,21 @@ It has a crossplatform Avalonia UI desktop app that flashes directly to an **RP2
 - **HID report-descriptor fix** — the controller now declares the full 8-byte input report (the
   original declared 7 while sending 8; the Switch tolerated it but strict USB hosts dropped reports).
 - **Parallel route generation** — the per-layer/per-phase TSP solves run across CPU cores, making
-  route generation **5-8× faster** on a multi-core machine. Routes are *not* identical to the
+  route generation **5-8× faster in the 0.5 benchmark corpus** on a multi-core machine. Routes are *not* identical to the
   serial path (the pre-solve runs before emission, so it cannot know where the pen will be when
-  each layer starts) — but since 0.5 they are **shorter**: measured 2-5% less pen travel and
+  each layer starts). The 0.5 corpus measured 2-5% less pen travel and
   3-7% shorter drawings than solving serially. See [`Docs/bench/`](./Docs/bench/) for the numbers
   and how to reproduce them.
+- **Optional dynamic buckets (0.6 candidate)** — integrates upstream 0.9.2's menu timings,
+  per-layer cost comparison and shared borders while retaining parallel route solves. The
+  **Enable Bucket Fills** checkbox is independent of the old experimental flag and starts off.
+  Comparing both plans can take longer to generate; actual Switch results remain to be tested.
 - **Tap timing in HID polls (0.5, experimental, RP2040/RP2350 only)** — an opt-in menu item that
   makes the firmware hold each tap until the console has actually polled it a set number of times,
   instead of for a fixed 25ms. A 25ms sleep assumes the console looked during it, and one tap it
   missed shifts the rest of the drawing by a cell — the leading suspect for draws that go wrong
-  hours in. **Off by default and never verified against a real Switch**, by this project or by
-  upstream, who shelved the idea because it draws more slowly. It writes a different `.tdld` format
+  hours in. **Off by default and not yet verified on a real Switch by this project.** The upstream
+  experiment was shelved with a speed concern; this does not establish reliability. It writes a different `.tdld` format
   (v4); an ESP32 board refuses that file, and the app exports the standard format for ESP32 anyway.
 - **Reliable, verified ESP32-S3 flashing (0.4)** — every write is now checked against the device's
   own flash MD5 and re-flashed if needed. Previously a flash could silently truncate, leaving a
@@ -81,7 +89,7 @@ To put the board in **download mode** (needed for any flashing): **hold BOOT, ta
 
 ### Using the desktop app (no command line needed)
 1. Open the desktop app. The bottom of the left column has an **"ESP32-S3 Output"** section (there's a **"Setup Steps (ESP32)"** button with this guide built in).
-2. **First time only:** put the board in download mode, pick its COM port, press **"Flash Base Firmware (ESP32)"**. When it says Done, tap **RESET** to run it. *(If the LED gets stuck on solid yellow, tap RESET again — the software reset doesn't always start the app.)*
+2. **First time only:** put the board in download mode, pick its COM port, and press **"Flash Base Firmware (ESP32)"**. Leave it in download mode to export the drawing next. If you reset it first, enter download mode again before exporting.
 3. **For each image:** load your image (≤ 256×256), choose **Switch 2** as the version, put the board in download mode again, and press **"Export To ESP32!"**. A real drawing can take a while to flash — that's expected.
 4. Unplug from the PC and plug the **USB** port into your Switch.
 5. On the Switch: enable **Settings → Controllers and Sensors → Wired Pro Controller Communication**, open Palette House on the advanced UI, cursor at the top-left, zoomed out, top colour black.

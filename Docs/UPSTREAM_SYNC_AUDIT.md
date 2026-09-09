@@ -1,5 +1,9 @@
 # Upstream sync audit — 2026-07-29
 
+> Historical planning document. Its claims of byte-identical serial/parallel exports are not
+> the current correctness contract: different valid routes can emit different commands.
+> See the [0.9.2 audit](UPSTREAM_0.9.2_AUDIT.md) for the current integration and comparison.
+
 Range audited: `6ce4683` (our sync marker, upstream tag 0.6.0) → `upstream/master`
 (`a50213c`, upstream tag **0.8.3**).
 

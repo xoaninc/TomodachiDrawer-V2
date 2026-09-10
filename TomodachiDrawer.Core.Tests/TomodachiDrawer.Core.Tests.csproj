@@ -13,7 +13,7 @@
     <!-- Skia's Linux natives do not flow transitively from Core, and these projects create
          SKBitmaps, so on a Linux CI runner they fail with "Unable to load shared library
          libSkiaSharp". Same pin as the UI project, same version as Core's SkiaSharp. -->
-    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.151.2" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.152.0" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\TomodachiDrawer.Core\TomodachiDrawer.Core.csproj" />
